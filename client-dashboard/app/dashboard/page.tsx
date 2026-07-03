@@ -8,6 +8,47 @@ interface Props {
   searchParams: Promise<{ client_id?: string }>
 }
 
+interface DashboardProfile {
+  id: string
+  company_name: string | null
+  uptime_url: string | null
+  analytics_url: string | null
+  umami_website_id?: string | null
+  kuma_status_slug?: string | null
+  kuma_badges?: Array<{ label: string; url: string }> | null
+  updated_at?: string | null
+}
+
+interface DashboardTicket {
+  id: string
+  client_id: string
+  title: string
+  description: string
+  status: 'open' | 'in_progress' | 'resolved' | 'closed'
+  created_at: string
+  updated_at?: string
+  closed_at?: string
+  ticket_messages?: Array<{
+    id: string
+    ticket_id: string
+    sender_type: 'client' | 'admin'
+    message: string
+    image_url?: string | null
+    created_at: string
+  }>
+}
+
+interface DashboardInvoice {
+  id: string
+  client_id: string
+  invoice_date: string
+  description: string
+  amount: string
+  status: 'paid' | 'open'
+  zoho_link: string
+  created_at: string
+}
+
 export default async function DashboardPage({ searchParams }: Props) {
   const supabase = await createClient()
   const supabaseAdmin = createAdminClient()
@@ -39,9 +80,9 @@ export default async function DashboardPage({ searchParams }: Props) {
     }
   }
 
-  let profile = null
-  let tickets: any[] = []
-  let invoices: any[] = []
+  let profile: DashboardProfile | null = null
+  let tickets: DashboardTicket[] = []
+  let invoices: DashboardInvoice[] = []
 
   // Use admin client when viewing as admin to bypass RLS
   const queryClient = isViewingAsAdmin ? supabaseAdmin : supabase
@@ -79,14 +120,17 @@ export default async function DashboardPage({ searchParams }: Props) {
     // Table may not exist yet
   }
 
+  const websiteId = typeof profile?.umami_website_id === 'string' ? profile.umami_website_id : null
+  const statusSlug = typeof profile?.kuma_status_slug === 'string' ? profile.kuma_status_slug : null
+
   // Fetch Umami analytics stats (30-day) — uses client's website ID if set, otherwise global default
-  const umamiStats = await getUmamiStats(profile?.umami_website_id)
+  const umamiStats = await getUmamiStats(websiteId)
 
   // Fetch Umami pageview time-series for chart
-  const umamiPageviews = await getUmamiPageviews(profile?.umami_website_id)
+  const umamiPageviews = await getUmamiPageviews(websiteId)
 
   // Fetch Uptime Kuma monitors — uses client's status slug if set, otherwise global default
-  const kumaMonitors = await getKumaMonitors(profile?.kuma_status_slug)
+  const kumaMonitors = await getKumaMonitors(statusSlug)
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">

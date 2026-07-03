@@ -8,6 +8,25 @@ interface EmailPayload {
   html: string
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function sanitizeForHeader(value: string) {
+  return value.replace(/[\r\n]/g, ' ').trim()
+}
+
+function getSiteUrl() {
+  const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim()
+  if (!configuredUrl) return 'http://localhost:3000'
+  return configuredUrl.replace(/\/$/, '')
+}
+
 const transporter = nodemailer.createTransport({
   host: 'smtp.purelymail.com',
   port: 587,
@@ -36,19 +55,21 @@ export async function sendEmail({ to, subject, html }: EmailPayload) {
 /**
  * Send new ticket notification to admin.
  */
-export async function notifyAdminNewTicket(ticketTitle: string, clientEmail: string, ticketId: string) {
+export async function notifyAdminNewTicket(ticketTitle: string, clientEmail: string) {
   const adminEmails = process.env.ADMIN_EMAIL?.split(',').map(e => e.trim()).filter(Boolean) || []
   if (!adminEmails.length) return
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+  const siteUrl = getSiteUrl()
+  const safeTitle = escapeHtml(sanitizeForHeader(ticketTitle))
+  const safeClientEmail = escapeHtml(sanitizeForHeader(clientEmail))
 
   for (const email of adminEmails) {
     await sendEmail({
       to: email,
-      subject: `New Support Ticket: ${ticketTitle}`,
+      subject: `New Support Ticket: ${sanitizeForHeader(ticketTitle)}`,
       html: `
-        <p>A new support ticket has been submitted by <strong>${clientEmail}</strong>.</p>
-        <p><strong>Subject:</strong> ${ticketTitle}</p>
+        <p>A new support ticket has been submitted by <strong>${safeClientEmail}</strong>.</p>
+        <p><strong>Subject:</strong> ${safeTitle}</p>
         <p><a href="${siteUrl}/admin">View in Admin Panel</a></p>
       `,
     })
@@ -59,15 +80,17 @@ export async function notifyAdminNewTicket(ticketTitle: string, clientEmail: str
  * Notify client that admin replied to their ticket.
  */
 export async function notifyClientTicketUpdate(ticketTitle: string, clientEmail: string, status: string) {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
-  const statusLabel = status.replace('_', ' ')
+  const siteUrl = getSiteUrl()
+  const safeTitle = escapeHtml(sanitizeForHeader(ticketTitle))
+  const safeStatus = escapeHtml(sanitizeForHeader(status.replace(/_/g, ' ')))
+  const safeClientEmail = escapeHtml(sanitizeForHeader(clientEmail))
 
   await sendEmail({
-    to: clientEmail,
-    subject: `Ticket Updated: ${ticketTitle}`,
+    to: safeClientEmail,
+    subject: `Ticket Updated: ${sanitizeForHeader(ticketTitle)}`,
     html: `
-      <p>Your support ticket <strong>"${ticketTitle}"</strong> has been updated.</p>
-      <p><strong>Status:</strong> ${statusLabel}</p>
+      <p>Your support ticket <strong>&quot;${safeTitle}&quot;</strong> has been updated.</p>
+      <p><strong>Status:</strong> ${safeStatus}</p>
       <p><a href="${siteUrl}/dashboard">View in your Dashboard</a></p>
     `,
   })

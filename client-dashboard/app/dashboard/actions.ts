@@ -7,6 +7,13 @@ import { notifyAdminNewTicket, notifyClientTicketUpdate } from '@/utils/email'
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024 // 2MB
 
+function createSafeUploadPath(userId: string, file: File) {
+  const extension = (file.name.split('.').pop() || 'png').toLowerCase()
+  const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg']
+  const safeExtension = allowedExtensions.includes(extension) ? extension : 'png'
+  return `${userId}/${Date.now()}.${safeExtension}`
+}
+
 export async function createTicket(formData: FormData) {
   const supabase = await createClient()
   const supabaseAdmin = createAdminClient()
@@ -31,8 +38,7 @@ export async function createTicket(formData: FormData) {
       throw new Error('Only image files are allowed')
     }
 
-    const ext = file.name.split('.').pop() || 'png'
-    const fileName = `${user.id}/${Date.now()}.${ext}`
+    const fileName = createSafeUploadPath(user.id, file)
 
     const { error: uploadErr } = await supabaseAdmin.storage
       .from('ticket-attachments')
@@ -81,7 +87,7 @@ export async function createTicket(formData: FormData) {
 
   // Notify admin
   const userEmail = user.email || 'Unknown'
-  notifyAdminNewTicket(title, userEmail, ticket.id).catch(() => {})
+  notifyAdminNewTicket(title, userEmail).catch(() => {})
 
   revalidatePath('/dashboard')
   revalidatePath('/admin')
@@ -117,8 +123,7 @@ export async function replyToTicket(formData: FormData) {
     if (file.size > MAX_FILE_SIZE) throw new Error('Attachment must be less than 2MB')
     if (!file.type.startsWith('image/')) throw new Error('Only image files are allowed')
 
-    const ext = file.name.split('.').pop() || 'png'
-    const fileName = `${user.id}/${Date.now()}.${ext}`
+    const fileName = createSafeUploadPath(user.id, file)
 
     const { error: uploadErr } = await supabaseAdmin.storage
       .from('ticket-attachments')
