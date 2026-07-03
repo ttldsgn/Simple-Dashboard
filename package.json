@@ -3,6 +3,6 @@
   "private": true,
   "scripts": {
     "build": "cd client-dashboard && npm ci && npm run build",
-    "start": "cd client-dashboard && npm run start"
+    "start": "cd client-dashboard && npm run start -- -p 3003"
   }
 }
