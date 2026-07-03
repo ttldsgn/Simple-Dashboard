@@ -86,8 +86,18 @@ export default function UpdatePasswordPage() {
         return
       }
 
-      // Password set successfully — redirect to dashboard
-      router.push('/dashboard')
+      // Password set successfully — check role and redirect accordingly
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle()
+        router.push(profile?.role === 'admin' ? '/admin' : '/dashboard')
+      } else {
+        router.push('/dashboard')
+      }
     } catch {
       setError('Something went wrong. Please try again.')
       setSubmitting(false)
