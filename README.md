@@ -60,7 +60,7 @@ An open-source client portal built with **Next.js**, **Supabase**, **Umami Analy
 | Charts | Recharts |
 | Styling | Tailwind CSS 4 |
 | Email | Nodemailer (SMTP) |
-| Deployment | Node.js server (xCloud, VPS, or any host) |
+| Deployment | Node.js server (VPS or any host) |
 
 ---
 
@@ -119,19 +119,16 @@ Copy `client-dashboard/.env.example` to `.env.local` and configure:
 
 ## Deployment
 
-This project runs on any Node.js host. It currently deploys via **xCloud** with the following configuration:
+This project runs on any Node.js host. The `client-dashboard/` subdirectory contains the Next.js app, while the root `package.json` acts as a deployment proxy that forwards build and start commands into the subdirectory.
 
 | Setting | Value |
 |---|---|
 | Node version | 20.x or 22.x |
-| Web root | `client-dashboard` |
 | Build command | `npm run build` |
 | Start command | `npm run start` |
-| Port | 3003 (configurable) |
+| Port | `3003` (configurable via `PORT` env var) |
 
-A root-level `package.json` acts as a deployment proxy, forwarding build and start commands into the `client-dashboard/` subdirectory.
-
-The `.env` file can be set via xCloud's Environment field, or placed manually in `client-dashboard/.env` on the server.
+Place your `.env` file in `client-dashboard/.env` on the server with all required environment variables.
 
 ---
 
