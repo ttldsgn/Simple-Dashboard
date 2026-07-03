@@ -406,7 +406,7 @@ export default function DashboardTabs({
                                     </p>
                                     <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
                                     {msg.image_url && (
-                                      <a href={msg.image_url} target="_blank" rel="noreferrer">
+                                      <a href={msg.image_url} target="_blank" rel="noopener noreferrer">
                                         {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img src={msg.image_url} alt="Screenshot" className="mt-2 max-h-40 rounded" />
                                       </a>
@@ -444,7 +444,7 @@ export default function DashboardTabs({
                   ))}
                 </div>
               ) : (
-                <div className="py-12 text-center text-slate-500"><p>You haven't submitted any support tickets yet.</p></div>
+                <div className="py-12 text-center text-slate-500"><p>You haven&apos;t submitted any support tickets yet.</p></div>
               )}
             </div>
           </div>

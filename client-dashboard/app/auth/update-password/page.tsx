@@ -10,7 +10,6 @@ export default function UpdatePasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [sessionReady, setSessionReady] = useState(false)
   const [checkingSession, setCheckingSession] = useState(true)
   const [sessionError, setSessionError] = useState('')
 
@@ -50,7 +49,6 @@ export default function UpdatePasswordPage() {
           return
         }
 
-        setSessionReady(true)
       } catch {
         setSessionError('Failed to establish session. Please try again.')
       } finally {
