@@ -113,6 +113,8 @@ Copy `client-dashboard/.env.example` to `.env.local` and configure:
 | `ADMIN_EMAIL` | Admin email for notifications |
 | `EMAIL_FROM` | From address for outgoing emails |
 
+> 💡 **Any SMTP provider works** — despite the `PURELYMAIL_` prefix in the variable names, these accept credentials from any SMTP service (SendGrid, Mailgun, Gmail SMTP, Zoho, AWS SES, etc.). The nodemailer transport is configured in `client-dashboard/utils/email.ts`.
+
 ---
 
 ## Deployment
@@ -155,6 +157,10 @@ The data fetching is modular — edit these files:
 - `client-dashboard/utils/kuma.ts` — swap Uptime Kuma for Betterstack, Statuspage, etc.
 
 The dashboard components in `DashboardTabs.tsx` consume typed interfaces (`UmamiStats`, `KumaMonitor`), so updating the utils is all that's needed.
+
+### Using a different email provider
+
+The email transport is configured in `client-dashboard/utils/email.ts`. You can swap Purelymail for any SMTP service (SendGrid, Mailgun, Gmail SMTP, Zoho, AWS SES, etc.) by updating the host, port, and auth settings. The environment variable names (`PURELYMAIL_SMTP_USER`, `PURELYMAIL_SMTP_PASS`) can be renamed to match your provider if desired — just update the references in `email.ts`.
 
 ### Changing the port
 
