@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start -p 3003",
+    "build": "cp ../.env .env 2>/dev/null; next build",
+    "start": "fuser -k 3003/tcp 2>/dev/null; sleep 1; next start -p 3003",
     "lint": "eslint"
   },
   "dependencies": {
