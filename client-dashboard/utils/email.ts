@@ -23,7 +23,9 @@ function sanitizeForHeader(value: string) {
 
 function getSiteUrl() {
   const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim()
-  if (!configuredUrl) return 'http://localhost:3000'
+  if (!configuredUrl) {
+    throw new Error('NEXT_PUBLIC_SITE_URL is not set. Password reset links and email URLs will be broken.')
+  }
   return configuredUrl.replace(/\/$/, '')
 }
 
