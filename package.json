@@ -2,7 +2,7 @@
   "name": "simple-dashboard",
   "private": true,
   "scripts": {
-    "build": "cd client-dashboard && npm ci && npm run build",
+    "build": "cp .env client-dashboard/.env 2>/dev/null; cd client-dashboard && npm ci && npm run build",
     "start": "cd client-dashboard && npm run start -- -p 3003"
   }
 }
