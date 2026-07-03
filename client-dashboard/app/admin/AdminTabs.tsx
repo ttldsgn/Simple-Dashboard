@@ -9,7 +9,7 @@ import {
   deleteClient,
   purgeOrphans,
 } from '@/app/auth/callback/actions'
-import { adminReplyToTicket, adminUpdateTicketStatus, deleteTickets } from '@/app/dashboard/actions'
+import { adminReplyToTicket, adminUpdateTicketStatus, deleteTickets, addInvoice, updateInvoiceStatus, updateInvoice, deleteInvoice } from '@/app/dashboard/actions'
 
 interface KumaBadge {
   label: string
@@ -53,10 +53,22 @@ interface Props {
   emailMap: Record<string, string>
   companyNameMap: Record<string, string>
   tickets: Ticket[]
+  allInvoices: Invoice[]
 }
 
-export default function AdminTabs({ clients, emailMap, companyNameMap, tickets }: Props) {
-  const [activeTab, setActiveTab] = useState<'clients' | 'invite' | 'tickets'>('clients')
+interface Invoice {
+  id: string
+  client_id: string
+  invoice_date: string
+  description: string
+  amount: string
+  status: 'paid' | 'open'
+  zoho_link: string
+  created_at: string
+}
+
+export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, allInvoices }: Props) {
+  const [activeTab, setActiveTab] = useState<'clients' | 'invite' | 'tickets' | 'invoices'>('clients')
   const [editingClient, setEditingClient] = useState<ClientProfile | null>(null)
   const [message, setMessage] = useState('')
   const [inviteMessage, setInviteMessage] = useState('')
@@ -73,6 +85,22 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets }
   const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set())
   const [isDeletingTickets, setIsDeletingTickets] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  // Invoice state
+  const [invoiceClientId, setInvoiceClientId] = useState('')
+  const [invoiceForm, setInvoiceForm] = useState({ date: '', description: '', amount: '', status: 'open' as 'paid' | 'open', link: '' })
+  const [invoiceMsg, setInvoiceMsg] = useState('')
+
+  // Invoice list filter state
+  const [invFilterClient, setInvFilterClient] = useState('')
+  const [invFilterStatus, setInvFilterStatus] = useState<'all' | 'paid' | 'open'>('all')
+
+  // Invoice edit state
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null)
+  const [editInvoiceForm, setEditInvoiceForm] = useState({ date: '', description: '', amount: '', status: 'open' as 'paid' | 'open', link: '' })
+
+  // Invoice delete confirm
+  const [deletingInvoiceId, setDeletingInvoiceId] = useState<string | null>(null)
 
   // Badge editing state
   const [editBadges, setEditBadges] = useState<KumaBadge[]>([])
@@ -339,7 +367,7 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets }
       {/* Tab Navigation */}
       <div className="border-b border-slate-200">
         <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-          {(['clients', 'invite', 'tickets'] as const).map((tab) => (
+          {(['clients', 'invite', 'tickets', 'invoices'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -349,13 +377,13 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets }
                   : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
               }`}
             >
-              {tab === 'clients' ? 'Clients' : tab === 'invite' ? 'Invite' : (
+              {tab === 'clients' ? 'Clients' : tab === 'invite' ? 'Invite' : tab === 'tickets' ? (
                 <span>Tickets {openTickets.length > 0 && (
                   <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-indigo-100 px-1.5 py-0.5 text-xs font-bold text-indigo-700">
                     {openTickets.length}
                   </span>
                 )}</span>
-              )}
+              ) : 'Invoices'}
             </button>
           ))}
         </nav>
@@ -607,6 +635,303 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets }
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* === INVOICES TAB === */}
+      {activeTab === 'invoices' && (
+        <div className="space-y-6">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Manage Invoices</h3>
+            <p className="text-sm text-slate-500">Add Zoho invoice links for clients.</p>
+          </div>
+
+          {invoiceMsg && (
+            <div className={`rounded-md p-3 text-sm ${invoiceMsg.includes('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+              {invoiceMsg}
+            </div>
+          )}
+
+          {/* Add Invoice Form */}
+          <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+            <h4 className="text-md font-medium text-slate-900 mb-4">Add New Invoice</h4>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                setIsSubmitting(true)
+                setInvoiceMsg('')
+                const fd = new FormData()
+                fd.set('client_id', invoiceClientId)
+                fd.set('invoice_date', invoiceForm.date)
+                fd.set('description', invoiceForm.description)
+                fd.set('amount', invoiceForm.amount)
+                fd.set('status', invoiceForm.status)
+                fd.set('zoho_link', invoiceForm.link)
+                try {
+                  await addInvoice(fd)
+                  setInvoiceMsg('Invoice added successfully!')
+                  setInvoiceForm({ date: '', description: '', amount: '', status: 'open', link: '' })
+                } catch (err) {
+                  setInvoiceMsg(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`)
+                } finally {
+                  setIsSubmitting(false)
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Client <span className="text-red-500">*</span></label>
+                <select
+                  value={invoiceClientId}
+                  onChange={(e) => setInvoiceClientId(e.target.value)}
+                  required
+                  className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                >
+                  <option value="">Select a client...</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.company_name || emailMap[c.id] || 'Unnamed Client'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Invoice Date</label>
+                  <input
+                    type="date"
+                    value={invoiceForm.date}
+                    onChange={(e) => setInvoiceForm((prev) => ({ ...prev, date: e.target.value }))}
+                    className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Amount</label>
+                  <input
+                    type="text"
+                    placeholder="$500.00"
+                    value={invoiceForm.amount}
+                    onChange={(e) => setInvoiceForm((prev) => ({ ...prev, amount: e.target.value }))}
+                    className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                  <select
+                    value={invoiceForm.status}
+                    onChange={(e) => setInvoiceForm((prev) => ({ ...prev, status: e.target.value as 'paid' | 'open' }))}
+                    className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  >
+                    <option value="open">Open</option>
+                    <option value="paid">Paid</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Description <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  placeholder="e.g., Website Development — July 2026"
+                  value={invoiceForm.description}
+                  onChange={(e) => setInvoiceForm((prev) => ({ ...prev, description: e.target.value }))}
+                  required
+                  className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Zoho Invoice Link <span className="text-red-500">*</span></label>
+                <input
+                  type="url"
+                  placeholder="https://zohoinvoicepay.com/invoice/..."
+                  value={invoiceForm.link}
+                  onChange={(e) => setInvoiceForm((prev) => ({ ...prev, link: e.target.value }))}
+                  required
+                  className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isSubmitting || !invoiceClientId}
+                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+              >
+                {isSubmitting ? 'Adding...' : 'Add Invoice'}
+              </button>
+            </form>
+          </div>
+
+          {/* Filter bar */}
+          <div className="flex gap-3 items-center">
+            <select
+              value={invFilterClient}
+              onChange={(e) => setInvFilterClient(e.target.value)}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            >
+              <option value="">All Clients</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.company_name || emailMap[c.id] || 'Unnamed Client'}
+                </option>
+              ))}
+            </select>
+            <select
+              value={invFilterStatus}
+              onChange={(e) => setInvFilterStatus(e.target.value as 'all' | 'paid' | 'open')}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            >
+              <option value="all">All Status</option>
+              <option value="open">Open</option>
+              <option value="paid">Paid</option>
+            </select>
+          </div>
+
+          {/* Invoice list */}
+          {(() => {
+            const filtered = allInvoices.filter((inv) => {
+              if (invFilterClient && inv.client_id !== invFilterClient) return false
+              if (invFilterStatus !== 'all' && inv.status !== invFilterStatus) return false
+              return true
+            })
+
+            if (filtered.length === 0) {
+              return (
+                <div className="rounded-lg border border-slate-200 bg-white p-12 text-center shadow-sm">
+                  <p className="text-slate-500">No invoices found.</p>
+                </div>
+              )
+            }
+
+            return (
+              <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Client</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Description</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Amount</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    {filtered.map((inv) => {
+                      const clientName = companyNameMap[inv.client_id] || emailMap[inv.client_id] || 'Unknown'
+                      return (
+                        <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-3 whitespace-nowrap text-slate-700">{clientName}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-slate-700">
+                            {new Date(inv.invoice_date + 'T00:00:00').toLocaleDateString()}
+                          </td>
+
+                          {editingInvoiceId === inv.id ? (
+                            <>
+                              <td className="px-4 py-3" colSpan={4}>
+                                <form
+                                  onSubmit={async (e) => {
+                                    e.preventDefault()
+                                    setIsSubmitting(true)
+                                    const fd = new FormData()
+                                    fd.set('invoice_id', inv.id)
+                                    fd.set('invoice_date', editInvoiceForm.date)
+                                    fd.set('description', editInvoiceForm.description)
+                                    fd.set('amount', editInvoiceForm.amount)
+                                    fd.set('status', editInvoiceForm.status)
+                                    fd.set('zoho_link', editInvoiceForm.link)
+                                    try {
+                                      await updateInvoice(fd)
+                                      setEditingInvoiceId(null)
+                                    } catch (err) {
+                                      setInvoiceMsg(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`)
+                                    } finally {
+                                      setIsSubmitting(false)
+                                    }
+                                  }}
+                                  className="grid grid-cols-1 gap-2 sm:grid-cols-4"
+                                >
+                                  <input type="text" value={editInvoiceForm.description} onChange={(e) => setEditInvoiceForm(prev => ({ ...prev, description: e.target.value }))} required className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900" placeholder="Description" />
+                                  <input type="text" value={editInvoiceForm.amount} onChange={(e) => setEditInvoiceForm(prev => ({ ...prev, amount: e.target.value }))} className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900" placeholder="$" />
+                                  <select value={editInvoiceForm.status} onChange={(e) => setEditInvoiceForm(prev => ({ ...prev, status: e.target.value as 'paid' | 'open' }))} className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900">
+                                    <option value="open">Open</option>
+                                    <option value="paid">Paid</option>
+                                  </select>
+                                  <div className="flex gap-2">
+                                    <button type="submit" disabled={isSubmitting} className="rounded-md bg-indigo-600 px-2 py-1 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">Save</button>
+                                    <button type="button" onClick={() => setEditingInvoiceId(null)} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+                                  </div>
+                                </form>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="px-4 py-3 text-slate-700">{inv.description}</td>
+                              <td className="px-4 py-3 whitespace-nowrap text-slate-700">{inv.amount || '—'}</td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <button
+                                  onClick={async () => {
+                                    const fd = new FormData()
+                                    fd.set('invoice_id', inv.id)
+                                    fd.set('status', inv.status === 'paid' ? 'open' : 'paid')
+                                    try { await updateInvoiceStatus(fd) } catch {}
+                                  }}
+                                  className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium capitalize cursor-pointer ${
+                                    inv.status === 'paid'
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                      : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                                  }`}
+                                  title="Click to toggle status"
+                                >
+                                  {inv.status}
+                                </button>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditingInvoiceId(inv.id)
+                                      setEditInvoiceForm({ date: inv.invoice_date, description: inv.description, amount: inv.amount, status: inv.status, link: inv.zoho_link })
+                                    }}
+                                    className="text-xs font-medium text-indigo-600 hover:text-indigo-500"
+                                  >
+                                    Edit
+                                  </button>
+                                  {deletingInvoiceId === inv.id ? (
+                                    <>
+                                      <span className="text-xs text-red-600">Delete?</span>
+                                      <button
+                                        onClick={async () => {
+                                          setIsSubmitting(true)
+                                          const fd = new FormData()
+                                          fd.set('invoice_id', inv.id)
+                                          try { await deleteInvoice(fd); setDeletingInvoiceId(null) } catch {}
+                                          setIsSubmitting(false)
+                                        }}
+                                        disabled={isSubmitting}
+                                        className="text-xs font-medium text-red-600 hover:text-red-500 disabled:opacity-50"
+                                      >
+                                        Yes
+                                      </button>
+                                      <button onClick={() => setDeletingInvoiceId(null)} className="text-xs font-medium text-slate-500 hover:text-slate-700">No</button>
+                                    </>
+                                  ) : (
+                                    <button
+                                      onClick={() => setDeletingInvoiceId(inv.id)}
+                                      className="text-xs font-medium text-red-600 hover:text-red-500"
+                                    >
+                                      Delete
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          })()}
         </div>
       )}
 

@@ -41,6 +41,7 @@ export default async function DashboardPage({ searchParams }: Props) {
 
   let profile = null
   let tickets: any[] = []
+  let invoices: any[] = []
 
   // Use admin client when viewing as admin to bypass RLS
   const queryClient = isViewingAsAdmin ? supabaseAdmin : supabase
@@ -67,6 +68,17 @@ export default async function DashboardPage({ searchParams }: Props) {
     // Table may not exist yet
   }
 
+  try {
+    const { data: invoiceData } = await queryClient
+      .from('invoices')
+      .select('*')
+      .eq('client_id', effectiveUserId)
+      .order('invoice_date', { ascending: false })
+    invoices = invoiceData ?? []
+  } catch {
+    // Table may not exist yet
+  }
+
   // Fetch Umami analytics stats (30-day) — uses client's website ID if set, otherwise global default
   const umamiStats = await getUmamiStats(profile?.umami_website_id)
 
@@ -85,6 +97,7 @@ export default async function DashboardPage({ searchParams }: Props) {
           umamiStats={umamiStats}
           umamiPageviews={umamiPageviews}
           kumaMonitors={kumaMonitors}
+          initialInvoices={invoices}
           isViewingAsAdmin={isViewingAsAdmin}
         />
       </div>

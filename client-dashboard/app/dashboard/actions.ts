@@ -208,6 +208,154 @@ export async function adminReplyToTicket(formData: FormData) {
   revalidatePath('/dashboard')
 }
 
+// ============================================================================
+// Invoice actions (admin only)
+// ============================================================================
+
+export async function addInvoice(formData: FormData) {
+  const supabaseAdmin = createAdminClient()
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profile?.role !== 'admin') throw new Error('Unauthorized — admin only')
+
+  const clientId = formData.get('client_id') as string
+  const invoiceDate = formData.get('invoice_date') as string
+  const description = formData.get('description') as string
+  const amount = formData.get('amount') as string
+  const status = formData.get('status') as string
+  const zohoLink = formData.get('zoho_link') as string
+
+  if (!clientId || !description || !zohoLink) throw new Error('Required fields missing')
+  if (status !== 'paid' && status !== 'open') throw new Error('Invalid status')
+
+  const { error } = await supabaseAdmin
+    .from('invoices')
+    .insert({
+      client_id: clientId,
+      invoice_date: invoiceDate || new Date().toISOString().split('T')[0],
+      description,
+      amount,
+      status,
+      zoho_link: zohoLink,
+    })
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/admin')
+  revalidatePath('/dashboard')
+}
+
+export async function updateInvoiceStatus(formData: FormData) {
+  const supabaseAdmin = createAdminClient()
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profile?.role !== 'admin') throw new Error('Unauthorized — admin only')
+
+  const invoiceId = formData.get('invoice_id') as string
+  const status = formData.get('status') as string
+
+  if (!invoiceId || (status !== 'paid' && status !== 'open')) throw new Error('Invalid request')
+
+  const { error } = await supabaseAdmin
+    .from('invoices')
+    .update({ status })
+    .eq('id', invoiceId)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/admin')
+  revalidatePath('/dashboard')
+}
+
+export async function updateInvoice(formData: FormData) {
+  const supabaseAdmin = createAdminClient()
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profile?.role !== 'admin') throw new Error('Unauthorized — admin only')
+
+  const invoiceId = formData.get('invoice_id') as string
+  const invoiceDate = formData.get('invoice_date') as string
+  const description = formData.get('description') as string
+  const amount = formData.get('amount') as string
+  const status = formData.get('status') as string
+  const zohoLink = formData.get('zoho_link') as string
+
+  if (!invoiceId || !description || !zohoLink) throw new Error('Required fields missing')
+  if (status !== 'paid' && status !== 'open') throw new Error('Invalid status')
+
+  const { error } = await supabaseAdmin
+    .from('invoices')
+    .update({
+      invoice_date: invoiceDate || undefined,
+      description,
+      amount,
+      status,
+      zoho_link: zohoLink,
+    })
+    .eq('id', invoiceId)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/admin')
+  revalidatePath('/dashboard')
+}
+
+export async function deleteInvoice(formData: FormData) {
+  const supabaseAdmin = createAdminClient()
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profile?.role !== 'admin') throw new Error('Unauthorized — admin only')
+
+  const invoiceId = formData.get('invoice_id') as string
+  if (!invoiceId) throw new Error('Invoice ID required')
+
+  const { error } = await supabaseAdmin
+    .from('invoices')
+    .delete()
+    .eq('id', invoiceId)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/admin')
+  revalidatePath('/dashboard')
+}
+
 export async function deleteTickets(formData: FormData) {
   const supabaseAdmin = createAdminClient()
   const supabase = await createClient()

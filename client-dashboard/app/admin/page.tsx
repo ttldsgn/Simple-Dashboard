@@ -59,6 +59,12 @@ export default async function AdminPage() {
     .select('*, ticket_messages(*)')
     .order('updated_at', { ascending: false })
 
+  // Fetch all invoices
+  const { data: allInvoices } = await supabaseAdmin
+    .from('invoices')
+    .select('*')
+    .order('invoice_date', { ascending: false })
+
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       <div className="mx-auto max-w-6xl">
@@ -84,6 +90,7 @@ export default async function AdminPage() {
           emailMap={emailMap}
           companyNameMap={companyNameMap}
           tickets={tickets ?? []}
+          allInvoices={allInvoices ?? []}
         />
       </div>
     </div>

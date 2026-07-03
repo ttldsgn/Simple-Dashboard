@@ -55,7 +55,18 @@ interface Profile {
   updated_at?: string | null
 }
 
-type TabType = 'analytics' | 'uptime' | 'tickets'
+interface Invoice {
+  id: string
+  client_id: string
+  invoice_date: string
+  description: string
+  amount: string
+  status: 'paid' | 'open'
+  zoho_link: string
+  created_at: string
+}
+
+type TabType = 'analytics' | 'uptime' | 'tickets' | 'invoices'
 
 export default function DashboardTabs({
   profile,
@@ -63,6 +74,7 @@ export default function DashboardTabs({
   umamiStats,
   umamiPageviews,
   kumaMonitors,
+  initialInvoices,
   isViewingAsAdmin = false,
 }: {
   profile: Profile | null
@@ -70,6 +82,7 @@ export default function DashboardTabs({
   umamiStats: UmamiStats | null
   umamiPageviews: UmamiPageviews | null
   kumaMonitors: KumaMonitor[]
+  initialInvoices: Invoice[]
   isViewingAsAdmin?: boolean
 }) {
   const [activeTab, setActiveTab] = useState<TabType>('analytics')
@@ -196,12 +209,12 @@ export default function DashboardTabs({
       {/* Tab Navigation */}
       <div className="border-b border-slate-200">
         <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-          {(['analytics', 'uptime', 'tickets'] as TabType[]).map((tab) => (
+          {(['analytics', 'uptime', 'tickets', 'invoices'] as TabType[]).map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium capitalize ${
                 activeTab === tab ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
               }`}>
-              {tab === 'analytics' ? 'Analytics' : tab === 'uptime' ? 'Uptime Status' : 'Support Desk'}
+              {tab === 'analytics' ? 'Analytics' : tab === 'uptime' ? 'Uptime Status' : tab === 'tickets' ? 'Support Desk' : 'Invoices'}
             </button>
           ))}
         </nav>
@@ -227,6 +240,14 @@ export default function DashboardTabs({
               </div>
             )}
             <p className="text-xs text-slate-400">Data from Umami — last 3 days</p>
+            <a
+              href="https://analytics.totaldsgn.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-500 font-medium mt-1"
+            >
+              View more Statistics →
+            </a>
           </div>
         )}
 
@@ -261,6 +282,65 @@ export default function DashboardTabs({
               <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"><p className="text-center text-slate-500">Unable to load uptime monitors.</p></div>
             )}
             <p className="text-xs text-slate-400">Data from Uptime Kuma</p>
+          </div>
+        )}
+
+        {/* === INVOICES TAB === */}
+        {activeTab === 'invoices' && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Invoices</h3>
+              <p className="text-sm text-slate-500">View and pay your invoices via Zoho.</p>
+            </div>
+            {initialInvoices.length === 0 ? (
+              <div className="rounded-lg border border-slate-200 bg-white p-12 text-center shadow-sm">
+                <p className="text-slate-500">No invoices yet.</p>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Description</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Amount</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Invoice</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    {initialInvoices.map((inv) => (
+                      <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-700">
+                          {new Date(inv.invoice_date + 'T00:00:00').toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 text-slate-700">{inv.description}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-slate-700">{inv.amount || '—'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium capitalize ${
+                            inv.status === 'paid'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}>
+                            {inv.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <a
+                            href={inv.zoho_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-medium text-indigo-600 hover:text-indigo-500"
+                          >
+                            View Invoice ↗
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
