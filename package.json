@@ -1,5 +1,6 @@
 {
   "name": "simple-dashboard",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "build": "cp .env client-dashboard/.env 2>/dev/null; cd client-dashboard && npm ci && npm run build",

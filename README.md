@@ -1,5 +1,11 @@
 # Simple Dashboard
 
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/ttldsgn/Simple-Dashboard/releases)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-blue?logo=typescript)](https://www.typescriptlang.org)
+[![License](https://img.shields.io/badge/license-GPL--2.0-green.svg)](LICENSE)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Donate-FF8F3F?logo=buy-me-a-coffee)](https://buymeacoffee.com/totaldsgn)
+
 An open-source client portal built with **Next.js**, **Supabase**, **Umami Analytics**, and **Uptime Kuma**. Gives clients a self-service dashboard to view website analytics, monitor uptime, submit support tickets, and access invoices — all in one place.
 
 ---
