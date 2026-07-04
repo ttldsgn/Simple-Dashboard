@@ -1,4 +1,4 @@
-import net from 'net'
+import { lookup } from 'whois'
 
 export interface DomainExpiration {
   domain: string
@@ -7,80 +7,8 @@ export interface DomainExpiration {
   error?: string
 }
 
-// Simple list of WHOIS servers mapped to TLDs for direct lookups
-// For most common TLDs, we use whois.iana.org first then follow referrals
-const WHOIS_DEFAULTS: Record<string, string> = {
-  com: 'whois.verisign-grs.com',
-  net: 'whois.verisign-grs.com',
-  org: 'whois.pir.org',
-  io: 'whois.nic.io',
-  co: 'whois.nic.co',
-  ai: 'whois.nic.ai',
-  app: 'whois.nic.google',
-  dev: 'whois.nic.google',
-  me: 'whois.nic.me',
-  xyz: 'whois.nic.xyz',
-}
-
-function getTLD(domain: string): string {
-  const parts = domain.split('.')
-  return parts[parts.length - 1]?.toLowerCase() || 'com'
-}
-
-async function whoisLookupRaw(domain: string): Promise<string> {
-  const tld = getTLD(domain)
-  const server = WHOIS_DEFAULTS[tld] || 'whois.iana.org'
-
-  // Try the TLD-specific server first, fall back to iana
-  return tryServer(server, domain)
-}
-
-async function tryServer(server: string, domain: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const client = new net.Socket()
-    let data = ''
-    let resolved = false
-    const timeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true
-        client.destroy()
-        if (data) resolve(data)
-        else reject(new Error(`WHOIS timeout connecting to ${server}`))
-      }
-    }, 15000)
-
-    client.connect(43, server, () => {
-      client.write(domain + '\r\n')
-    })
-
-    client.on('data', (chunk: Buffer) => {
-      data += chunk.toString('utf-8')
-      // If we got a reasonable amount of data, we can resolve early
-      // (some WHOIS servers close right after sending, others keep TCP open)
-    })
-
-    client.on('close', () => {
-      if (!resolved) {
-        resolved = true
-        clearTimeout(timeout)
-        if (data) resolve(data)
-        else reject(new Error(`No data received from WHOIS server ${server}`))
-      }
-    })
-
-    client.on('error', (err: Error) => {
-      if (!resolved) {
-        resolved = true
-        clearTimeout(timeout)
-        reject(err)
-      }
-    })
-  })
-}
-
 /**
- * Looks up a domain's expiration date via WHOIS using Node.js native net module.
- * No external dependencies required.
+ * Looks up a domain's expiration date via WHOIS.
  */
 export async function getDomainExpiration(
   domain: string | undefined | null,
@@ -96,7 +24,15 @@ export async function getDomainExpiration(
   if (!clean) return null
 
   try {
-    const raw = await whoisLookupRaw(clean)
+    const raw = await new Promise<string>((resolve, reject) => {
+      lookup(clean, (err, data) => {
+        if (err) reject(err)
+        else if (typeof data === 'string') resolve(data)
+        else if (Array.isArray(data))
+          resolve(data.map((r) => r.data).join('\n'))
+        else resolve(String(data))
+      })
+    })
 
     // Try common WHOIS patterns to extract the expiry date
     // Different registrars use different field names
@@ -116,13 +52,10 @@ export async function getDomainExpiration(
       const match = raw.match(pattern)
       if (match) {
         expiryStr = match[1]
+        // Normalize dots to dashes for paid-till format
+        expiryStr = expiryStr.replace(/\./g, '-')
         break
       }
-    }
-
-    if (expiryStr) {
-      // Normalize dots to dashes for paid-till format
-      expiryStr = expiryStr.replace(/\./g, '-')
     }
 
     if (!expiryStr) {
