@@ -7,8 +7,11 @@ export interface DomainExpiration {
   error?: string
 }
 
+const WHOIS_TIMEOUT_MS = 8000
+
 /**
- * Looks up a domain's expiration date via WHOIS.
+ * Looks up a domain's expiration date via WHOIS with a timeout.
+ * If the WHOIS server doesn't respond within 8 seconds, returns null.
  */
 export async function getDomainExpiration(
   domain: string | undefined | null,
@@ -24,18 +27,25 @@ export async function getDomainExpiration(
   if (!clean) return null
 
   try {
-    const raw = await new Promise<string>((resolve, reject) => {
-      lookup(clean, (err, data) => {
-        if (err) reject(err)
-        else if (typeof data === 'string') resolve(data)
-        else if (Array.isArray(data))
-          resolve(data.map((r) => r.data).join('\n'))
-        else resolve(String(data))
-      })
-    })
+    const raw = await Promise.race([
+      new Promise<string>((resolve, reject) => {
+        lookup(clean, (err, data) => {
+          if (err) reject(err)
+          else if (typeof data === 'string') resolve(data)
+          else if (Array.isArray(data))
+            resolve(data.map((r) => r.data).join('\n'))
+          else resolve(String(data))
+        })
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('WHOIS lookup timed out')),
+          WHOIS_TIMEOUT_MS,
+        ),
+      ),
+    ])
 
     // Try common WHOIS patterns to extract the expiry date
-    // Different registrars use different field names
     const patterns = [
       /Registry Expiry Date:\s*(\d{4}-\d{2}-\d{2})/i,
       /Registrar Registration Expiration Date:\s*(\d{4}-\d{2}-\d{2})/i,
@@ -52,7 +62,6 @@ export async function getDomainExpiration(
       const match = raw.match(pattern)
       if (match) {
         expiryStr = match[1]
-        // Normalize dots to dashes for paid-till format
         expiryStr = expiryStr.replace(/\./g, '-')
         break
       }

@@ -141,7 +141,12 @@ export default async function DashboardPage({ searchParams }: Props) {
     ? profile.domain_expiry_domain
     : null
   if (expDomain) {
-    domainExpiration = await getDomainExpiration(expDomain)
+    try {
+      domainExpiration = await getDomainExpiration(expDomain)
+    } catch {
+      // WHOIS failed gracefully — dashboard still loads
+      domainExpiration = null
+    }
   }
 
   return (
