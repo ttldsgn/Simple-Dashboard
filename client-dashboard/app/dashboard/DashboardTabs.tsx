@@ -211,10 +211,10 @@ export default function DashboardTabs({
 
       {/* Tab Navigation */}
       <div className="border-b border-slate-200">
-        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+        <nav className="-mb-px flex space-x-3 sm:space-x-8 overflow-x-auto" aria-label="Tabs">
           {(['analytics', 'uptime', 'tickets', 'invoices'] as TabType[]).map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium capitalize ${
+              className={`whitespace-nowrap border-b-2 py-3 sm:py-4 px-0.5 sm:px-1 text-xs sm:text-sm font-medium capitalize flex-shrink-0 ${
                 activeTab === tab ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
               }`}>
               {tab === 'analytics' ? 'Analytics' : tab === 'uptime' ? 'Uptime Status' : tab === 'tickets' ? 'Support Desk' : 'Invoices'}
@@ -335,49 +335,84 @@ export default function DashboardTabs({
                 <p className="text-slate-500">No invoices yet.</p>
               </div>
             ) : (
-              <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
-                <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Description</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Amount</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Invoice</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {initialInvoices.map((inv) => (
-                      <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap text-slate-700">
-                          {new Date(inv.invoice_date + 'T00:00:00').toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 text-slate-700">{inv.description}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-slate-700">{inv.amount || '—'}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium capitalize ${
-                            inv.status === 'paid'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
-                          }`}>
-                            {inv.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <a
-                            href={inv.zoho_link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs font-medium text-indigo-600 hover:text-indigo-500"
-                          >
-                            View Invoice ↗
-                          </a>
-                        </td>
+              <>
+                {/* Desktop table: visible sm and up */}
+                <div className="hidden sm:block rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
+                  <table className="min-w-full divide-y divide-slate-200 text-sm">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Description</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Amount</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Invoice</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 bg-white">
+                      {initialInvoices.map((inv) => (
+                        <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap text-slate-700">
+                            {new Date(inv.invoice_date + 'T00:00:00').toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 text-slate-700">{inv.description}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-slate-700">{inv.amount || '—'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium capitalize ${
+                              inv.status === 'paid'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                            }`}>
+                              {inv.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <a
+                              href={inv.zoho_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-medium text-indigo-600 hover:text-indigo-500"
+                            >
+                              View Invoice ↗
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile cards: visible below sm */}
+                <div className="sm:hidden space-y-3">
+                  {initialInvoices.map((inv) => (
+                    <div key={inv.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500">
+                          {new Date(inv.invoice_date + 'T00:00:00').toLocaleDateString()}
+                        </span>
+                        <span className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium capitalize ${
+                          inv.status === 'paid'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>
+                          {inv.status}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium text-slate-900">{inv.description}</p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-700">{inv.amount || '—'}</span>
+                        <a
+                          href={inv.zoho_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                        >
+                          View Invoice ↗
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}
