@@ -328,7 +328,7 @@ export default function DashboardTabs({
           <div className="space-y-4">
             <div>
               <h3 className="text-lg font-semibold text-slate-900">Invoices</h3>
-              <p className="text-sm text-slate-500">View and pay your invoices via Zoho.</p>
+              <p className="text-sm text-slate-500">Download or pay your invoice online.</p>
             </div>
             {initialInvoices.length === 0 ? (
               <div className="rounded-lg border border-slate-200 bg-white p-12 text-center shadow-sm">
