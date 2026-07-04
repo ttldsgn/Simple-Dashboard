@@ -282,7 +282,7 @@ export default function DashboardTabs({
                   {domainExpiration.expiryDate ? (
                     <>
                       <p className="mt-1 text-2xl font-bold text-slate-900">
-                        {domainExpiration.expiryDate}
+                        {new Date(domainExpiration.expiryDate + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
                       </p>
                       <p className={`mt-1 text-lg font-semibold ${
                         (domainExpiration.daysRemaining ?? 0) <= 30
