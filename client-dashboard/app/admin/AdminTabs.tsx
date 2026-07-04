@@ -22,6 +22,7 @@ interface ClientProfile {
   umami_website_id: string | null
   kuma_status_slug: string | null
   kuma_badges?: KumaBadge[] | null
+  domain_expiry_domain?: string | null
   role: string
   created_at?: string
   updated_at?: string
@@ -592,6 +593,7 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, 
                           <div><label className="block text-xs font-medium text-slate-500 mb-1">Company Name</label><input type="text" name="company_name" defaultValue={client.company_name || ''} className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /></div>
                           <div><label className="block text-xs font-medium text-slate-500 mb-1">Umami Website ID</label><input type="text" name="umami_website_id" defaultValue={client.umami_website_id || ''} className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /></div>
                           <div className="sm:col-span-2"><label className="block text-xs font-medium text-slate-500 mb-1">Kuma Status Slug</label><input type="text" name="kuma_status_slug" defaultValue={client.kuma_status_slug || ''} className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /></div>
+                          <div className="sm:col-span-2"><label className="block text-xs font-medium text-slate-500 mb-1">Domain (Expiration Lookup)</label><input type="text" name="domain_expiry_domain" defaultValue={client.domain_expiry_domain || ''} placeholder="e.g., example.com" className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /><p className="mt-1 text-xs text-slate-400">The domain to check WHOIS expiration for (e.g., example.com).</p></div>
                           <div className="sm:col-span-2">{renderBadgeFields(editBadges, setEditBadges)}</div>
                         </div>
                         <div className="flex gap-3 pt-2">
@@ -946,6 +948,7 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, 
             <div><label htmlFor="company_name" className="block text-sm font-medium text-slate-700">Company Name</label><input type="text" id="company_name" name="company_name" placeholder="Acme Corp" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /></div>
             <div><label htmlFor="umami_website_id" className="block text-sm font-medium text-slate-700">Umami Website ID</label><input type="text" id="umami_website_id" name="umami_website_id" placeholder="Leave blank for global default" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /><p className="mt-1 text-xs text-slate-400">Found in Umami → Settings → Websites.</p></div>
             <div><label htmlFor="kuma_status_slug" className="block text-sm font-medium text-slate-700">Kuma Status Page Slug</label><input type="text" id="kuma_status_slug" name="kuma_status_slug" placeholder="Leave blank for global default" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /><p className="mt-1 text-xs text-slate-400">The URL path after /status/ in Kuma.</p></div>
+            <div><label htmlFor="inv_domain_expiry_domain" className="block text-sm font-medium text-slate-700">Domain (for expiration lookup)</label><input type="text" id="inv_domain_expiry_domain" name="domain_expiry_domain" placeholder="e.g., example.com" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /><p className="mt-1 text-xs text-slate-400">The domain to check WHOIS expiration for (e.g., example.com).</p></div>
             <div>{renderBadgeFields(inviteBadges, setInviteBadges)}</div>
             <button type="submit" disabled={isSubmitting} className="inline-flex justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50">{isSubmitting ? 'Sending Invitation...' : 'Send Invitation'}</button>
           </form>

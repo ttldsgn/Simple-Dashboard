@@ -87,6 +87,7 @@ export async function inviteUser(formData: FormData) {
   const companyName = formData.get('company_name') as string
   const umamiWebsiteId = formData.get('umami_website_id') as string
   const kumaStatusSlug = formData.get('kuma_status_slug') as string
+  const domainExpiryDomain = formData.get('domain_expiry_domain') as string
   const kumaBadgesJson = formData.get('kuma_badges') as string
 
   if (!email) {
@@ -123,6 +124,7 @@ export async function inviteUser(formData: FormData) {
         umami_website_id: umamiWebsiteId || null,
         kuma_status_slug: kumaStatusSlug || null,
         kuma_badges: kumaBadges,
+        domain_expiry_domain: domainExpiryDomain || null,
         role: 'client',
         updated_at: new Date().toISOString(),
       })
@@ -166,6 +168,7 @@ export async function updateClient(formData: FormData) {
   const companyName = formData.get('company_name') as string
   const umamiWebsiteId = formData.get('umami_website_id') as string
   const kumaStatusSlug = formData.get('kuma_status_slug') as string
+  const domainExpiryDomain = formData.get('domain_expiry_domain') as string
   const kumaBadgesJson = formData.get('kuma_badges') as string
 
   if (!clientId) {
@@ -186,6 +189,7 @@ export async function updateClient(formData: FormData) {
     company_name: companyName || null,
     umami_website_id: umamiWebsiteId || null,
     kuma_status_slug: kumaStatusSlug || null,
+    domain_expiry_domain: domainExpiryDomain || null,
     updated_at: new Date().toISOString(),
   }
 

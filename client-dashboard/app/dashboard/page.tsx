@@ -2,6 +2,8 @@ import { createClient } from '@/utils/supabase/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { getUmamiStats, getUmamiPageviews } from '@/utils/umami'
 import { getKumaMonitors } from '@/utils/kuma'
+import { getDomainExpiration } from '@/utils/whois'
+import type { DomainExpiration } from '@/utils/whois'
 import DashboardTabs from './DashboardTabs'
 
 interface Props {
@@ -16,6 +18,7 @@ interface DashboardProfile {
   umami_website_id?: string | null
   kuma_status_slug?: string | null
   kuma_badges?: Array<{ label: string; url: string }> | null
+  domain_expiry_domain?: string | null
   updated_at?: string | null
 }
 
@@ -132,6 +135,15 @@ export default async function DashboardPage({ searchParams }: Props) {
   // Fetch Uptime Kuma monitors — uses client's status slug if set, otherwise global default
   const kumaMonitors = await getKumaMonitors(statusSlug)
 
+  // Fetch domain expiration if configured for this client
+  let domainExpiration: DomainExpiration | null = null
+  const expDomain = typeof profile?.domain_expiry_domain === 'string'
+    ? profile.domain_expiry_domain
+    : null
+  if (expDomain) {
+    domainExpiration = await getDomainExpiration(expDomain)
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       <div className="mx-auto max-w-7xl">
@@ -143,6 +155,7 @@ export default async function DashboardPage({ searchParams }: Props) {
           kumaMonitors={kumaMonitors}
           initialInvoices={invoices}
           isViewingAsAdmin={isViewingAsAdmin}
+          domainExpiration={domainExpiration}
         />
       </div>
     </div>

@@ -15,6 +15,7 @@ import { signout } from '@/app/auth/callback/actions'
 import { useAutoLogout } from '@/hooks/useAutoLogout'
 import type { UmamiStats, UmamiPageviews } from '@/utils/umami'
 import type { KumaMonitor } from '@/utils/kuma'
+import type { DomainExpiration } from '@/utils/whois'
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
 
@@ -76,6 +77,7 @@ export default function DashboardTabs({
   kumaMonitors,
   initialInvoices,
   isViewingAsAdmin = false,
+  domainExpiration = null,
 }: {
   profile: Profile | null
   initialTickets: Ticket[]
@@ -84,6 +86,7 @@ export default function DashboardTabs({
   kumaMonitors: KumaMonitor[]
   initialInvoices: Invoice[]
   isViewingAsAdmin?: boolean
+  domainExpiration?: DomainExpiration | null
 }) {
   const [activeTab, setActiveTab] = useState<TabType>('analytics')
   const [showNewTicketForm, setShowNewTicketForm] = useState(false)
@@ -267,6 +270,39 @@ export default function DashboardTabs({
                 </div>
               </div>
             )}
+
+            {/* Domain Expiration Card */}
+            {domainExpiration && (
+              <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+                <h4 className="text-sm font-semibold text-slate-700 mb-3">Domain Expiration</h4>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-5 shadow-sm">
+                  <p className="text-sm font-medium text-slate-500">
+                    {domainExpiration.domain}
+                  </p>
+                  {domainExpiration.expiryDate ? (
+                    <>
+                      <p className="mt-1 text-2xl font-bold text-slate-900">
+                        {domainExpiration.expiryDate}
+                      </p>
+                      <p className={`mt-1 text-lg font-semibold ${
+                        (domainExpiration.daysRemaining ?? 0) <= 30
+                          ? 'text-red-600'
+                          : (domainExpiration.daysRemaining ?? 0) <= 90
+                            ? 'text-amber-600'
+                            : 'text-emerald-600'
+                      }`}>
+                        {domainExpiration.daysRemaining?.toLocaleString()} days
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-sm text-red-500">
+                      {domainExpiration.error || 'Could not determine expiration date'}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {kumaMonitors.length > 0 ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {kumaMonitors.map((monitor) => (
@@ -279,7 +315,9 @@ export default function DashboardTabs({
                 ))}
               </div>
             ) : (
-              <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"><p className="text-center text-slate-500">Unable to load uptime monitors.</p></div>
+              !domainExpiration && (
+                <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm"><p className="text-center text-slate-500">Unable to load uptime monitors.</p></div>
+              )
             )}
             <p className="text-xs text-slate-400">Data from Uptime Kuma</p>
           </div>
