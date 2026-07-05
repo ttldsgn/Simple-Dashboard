@@ -258,7 +258,7 @@ export default function DashboardTabs({
           <div className="space-y-6">
             {profile?.kuma_badges && Array.isArray(profile.kuma_badges) && profile.kuma_badges.length > 0 && (
               <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-                <h4 className="text-sm font-semibold text-slate-700 mb-4">Status Badges</h4>
+                <h4 className="text-sm font-semibold text-slate-700 mb-4">Status</h4>
                 <div className="flex flex-wrap gap-4">
                   {profile.kuma_badges.map((badge, i) => (
                     <div key={i} className="flex flex-col items-center gap-1">
