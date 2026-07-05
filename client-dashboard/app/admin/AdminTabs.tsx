@@ -645,7 +645,7 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, 
         <div className="space-y-6">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">Manage Invoices</h3>
-            <p className="text-sm text-slate-500">Add Zoho invoice links for clients.</p>
+            <p className="text-sm text-slate-500">Zoho invoice links for clients.</p>
           </div>
 
           {invoiceMsg && (
