@@ -860,6 +860,14 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, 
                                     <button type="submit" disabled={isSubmitting} className="rounded-md bg-indigo-600 px-2 py-1 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">Save</button>
                                     <button type="button" onClick={() => setEditingInvoiceId(null)} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
                                   </div>
+                                  <input
+                                    type="url"
+                                    value={editInvoiceForm.link}
+                                    onChange={(e) => setEditInvoiceForm(prev => ({ ...prev, link: e.target.value }))}
+                                    required
+                                    className="sm:col-span-4 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900"
+                                    placeholder="https://zohoinvoicepay.com/invoice/..."
+                                  />
                                 </form>
                               </td>
                             </>
