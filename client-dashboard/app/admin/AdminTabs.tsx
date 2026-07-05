@@ -10,6 +10,7 @@ import {
   purgeOrphans,
 } from '@/app/auth/callback/actions'
 import { adminReplyToTicket, adminUpdateTicketStatus, deleteTickets, addInvoice, updateInvoiceStatus, updateInvoice, deleteInvoice } from '@/app/dashboard/actions'
+import MfaCard from '@/components/MfaCard'
 
 interface KumaBadge {
   label: string
@@ -365,6 +366,9 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, 
 
   return (
     <div className="space-y-6">
+      {/* Admin MFA Status */}
+      <MfaCard />
+
       {/* Tab Navigation */}
       <div className="border-b border-slate-200">
         <nav className="-mb-px flex space-x-8" aria-label="Tabs">

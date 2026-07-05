@@ -19,6 +19,15 @@ export async function login(formData: FormData) {
 
   revalidatePath('/', 'layout')
 
+  // Check if user has MFA enrolled
+  const { data: factorsData, error: mfaError } = await supabase.auth.mfa.listFactors()
+  if (mfaError) {
+    return redirect('/?error=' + encodeURIComponent(mfaError.message))
+  }
+  if (factorsData?.totp && factorsData.totp.length > 0) {
+    return redirect('/auth/mfa/verify')
+  }
+
   // Check if user is admin — redirect to admin panel
   const {
     data: { user },

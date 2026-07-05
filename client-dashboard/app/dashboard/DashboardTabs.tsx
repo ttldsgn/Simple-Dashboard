@@ -13,6 +13,8 @@ import {
 import { createTicket, replyToTicket } from './actions'
 import { signout } from '@/app/auth/callback/actions'
 import { useAutoLogout } from '@/hooks/useAutoLogout'
+import MfaCard from '@/components/MfaCard'
+import type { FlashMessage } from '@/utils/flash'
 import type { UmamiStats, UmamiPageviews } from '@/utils/umami'
 import type { KumaMonitor } from '@/utils/kuma'
 import type { DomainExpiration } from '@/utils/whois'
@@ -78,6 +80,7 @@ export default function DashboardTabs({
   initialInvoices,
   isViewingAsAdmin = false,
   domainExpiration = null,
+  mfaFlash,
 }: {
   profile: Profile | null
   initialTickets: Ticket[]
@@ -87,6 +90,7 @@ export default function DashboardTabs({
   initialInvoices: Invoice[]
   isViewingAsAdmin?: boolean
   domainExpiration?: DomainExpiration | null
+  mfaFlash?: FlashMessage | null
 }) {
   const [activeTab, setActiveTab] = useState<TabType>('analytics')
   const [showNewTicketForm, setShowNewTicketForm] = useState(false)
@@ -201,6 +205,19 @@ export default function DashboardTabs({
         </div>
       )}
 
+      {/* MFA Status Messages (server-trusted flash) */}
+      {mfaFlash && (
+        <div className={`rounded-md border p-3 ${
+          mfaFlash.type === 'error'
+            ? 'bg-red-50 border-red-200'
+            : 'bg-green-50 border-green-200'
+        }`}>
+          <p className={`text-sm ${
+            mfaFlash.type === 'error' ? 'text-red-700' : 'text-green-700'
+          }`}>{mfaFlash.message}</p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div><h2 className="text-lg font-semibold text-slate-800">{profile?.company_name || 'Dashboard'}</h2></div>
@@ -208,6 +225,9 @@ export default function DashboardTabs({
           <button type="submit" className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50">Sign Out</button>
         </form>
       </div>
+
+      {/* MFA Card — only for the actual user, not admin preview */}
+      {!isViewingAsAdmin && <MfaCard />}
 
       {/* Tab Navigation */}
       <div className="border-b border-slate-200">

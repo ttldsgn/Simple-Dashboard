@@ -4,6 +4,7 @@ import { getUmamiStats, getUmamiPageviews } from '@/utils/umami'
 import { getKumaMonitors } from '@/utils/kuma'
 import { getDomainExpiration } from '@/utils/whois'
 import type { DomainExpiration } from '@/utils/whois'
+import { getFlash, type FlashMessage } from '@/utils/flash'
 import DashboardTabs from './DashboardTabs'
 
 interface Props {
@@ -56,6 +57,7 @@ export default async function DashboardPage({ searchParams }: Props) {
   const supabase = await createClient()
   const supabaseAdmin = createAdminClient()
   const { client_id: clientId } = await searchParams
+  const mfaFlash = await getFlash()
 
   const {
     data: { user },
@@ -161,6 +163,7 @@ export default async function DashboardPage({ searchParams }: Props) {
           initialInvoices={invoices}
           isViewingAsAdmin={isViewingAsAdmin}
           domainExpiration={domainExpiration}
+          mfaFlash={mfaFlash}
         />
       </div>
     </div>
