@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "cp ../.env .env 2>/dev/null; next build",
+    "build": "rm -rf node_modules .next 2>/dev/null; npm install && next build",
     "start": "next start -p ${PORT:-3003}",
     "lint": "eslint"
   },

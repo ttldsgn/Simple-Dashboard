@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "cp .env client-dashboard/.env 2>/dev/null; cd client-dashboard && npm ci && npm run build",
+    "build": "rm -rf client-dashboard/node_modules client-dashboard/.next 2>/dev/null; cp .env client-dashboard/.env 2>/dev/null; cd client-dashboard && npm install && npm run build",
     "start": "cd client-dashboard && npx next start -p ${PORT:-3003}"
   }
 }
