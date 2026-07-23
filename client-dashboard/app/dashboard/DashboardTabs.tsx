@@ -50,10 +50,11 @@ interface Ticket {
 interface Profile {
   id: string
   company_name: string | null
+  uptime_url: string | null
+  analytics_url: string | null
   umami_website_id?: string | null
   kuma_status_slug?: string | null
   kuma_badges?: KumaBadge[] | null
-  domain_expiry_domain?: string | null
   updated_at?: string | null
 }
 

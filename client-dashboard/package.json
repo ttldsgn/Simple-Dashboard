@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "cp ../.env .env 2>/dev/null; next build",
-    "start": "next start -p 3003",
+    "start": "lsof -ti:3003 | xargs -r kill -9 2>/dev/null; sleep 2; next start -p 3003",
     "lint": "eslint"
   },
   "dependencies": {

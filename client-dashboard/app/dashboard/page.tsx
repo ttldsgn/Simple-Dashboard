@@ -11,9 +11,11 @@ interface Props {
   searchParams: Promise<{ client_id?: string }>
 }
 
-interface DashboardProject {
+interface DashboardProfile {
   id: string
   company_name: string | null
+  uptime_url: string | null
+  analytics_url: string | null
   umami_website_id?: string | null
   kuma_status_slug?: string | null
   kuma_badges?: Array<{ label: string; url: string }> | null
@@ -24,7 +26,6 @@ interface DashboardProject {
 interface DashboardTicket {
   id: string
   client_id: string
-  project_id: string
   title: string
   description: string
   status: 'open' | 'in_progress' | 'resolved' | 'closed'
@@ -44,7 +45,6 @@ interface DashboardTicket {
 interface DashboardInvoice {
   id: string
   client_id: string
-  project_id: string
   invoice_date: string
   description: string
   amount: string
@@ -64,6 +64,7 @@ export default async function DashboardPage({ searchParams }: Props) {
   } = await supabase.auth.getUser()
 
   if (!user) {
+    // Redirect handled by middleware
     return null
   }
 
@@ -84,78 +85,68 @@ export default async function DashboardPage({ searchParams }: Props) {
     }
   }
 
-  let project: DashboardProject | null = null
+  let profile: DashboardProfile | null = null
   let tickets: DashboardTicket[] = []
   let invoices: DashboardInvoice[] = []
 
   // Use admin client when viewing as admin to bypass RLS
   const queryClient = isViewingAsAdmin ? supabaseAdmin : supabase
 
-  // Find the effective user's project via project_members
   try {
-    const { data: membership } = await queryClient
-      .from('project_members')
-      .select('project_id')
-      .eq('user_id', effectiveUserId)
+    const { data: profileData } = await queryClient
+      .from('profiles')
+      .select('*')
+      .eq('id', effectiveUserId)
       .maybeSingle()
-
-    if (membership?.project_id) {
-      const { data: projectData } = await queryClient
-        .from('projects')
-        .select('*')
-        .eq('id', membership.project_id)
-        .maybeSingle()
-      project = projectData
-    }
+    profile = profileData
   } catch {
-    // Schema may not exist yet
+    // Table may not exist yet
   }
 
-  if (project) {
-    try {
-      const { data: ticketData } = await queryClient
-        .from('tickets')
-        .select('*, ticket_messages(*)')
-        .eq('project_id', project.id)
-        .order('created_at', { ascending: false })
-      tickets = ticketData ?? []
-    } catch {
-      // Table may not exist yet
-    }
-
-    try {
-      const { data: invoiceData } = await queryClient
-        .from('invoices')
-        .select('*')
-        .eq('project_id', project.id)
-        .order('invoice_date', { ascending: false })
-      invoices = invoiceData ?? []
-    } catch {
-      // Table may not exist yet
-    }
+  try {
+    const { data: ticketData } = await queryClient
+      .from('tickets')
+      .select('*, ticket_messages(*)')
+      .eq('client_id', effectiveUserId)
+      .order('created_at', { ascending: false })
+    tickets = ticketData ?? []
+  } catch {
+    // Table may not exist yet
   }
 
-  const websiteId = typeof project?.umami_website_id === 'string' ? project.umami_website_id : null
-  const statusSlug = typeof project?.kuma_status_slug === 'string' ? project.kuma_status_slug : null
+  try {
+    const { data: invoiceData } = await queryClient
+      .from('invoices')
+      .select('*')
+      .eq('client_id', effectiveUserId)
+      .order('invoice_date', { ascending: false })
+    invoices = invoiceData ?? []
+  } catch {
+    // Table may not exist yet
+  }
 
-  // Fetch Umami analytics stats (30-day) — uses project's website ID if set, otherwise global default
+  const websiteId = typeof profile?.umami_website_id === 'string' ? profile.umami_website_id : null
+  const statusSlug = typeof profile?.kuma_status_slug === 'string' ? profile.kuma_status_slug : null
+
+  // Fetch Umami analytics stats (30-day) — uses client's website ID if set, otherwise global default
   const umamiStats = await getUmamiStats(websiteId)
 
   // Fetch Umami pageview time-series for chart
   const umamiPageviews = await getUmamiPageviews(websiteId)
 
-  // Fetch Uptime Kuma monitors — uses project's status slug if set, otherwise global default
+  // Fetch Uptime Kuma monitors — uses client's status slug if set, otherwise global default
   const kumaMonitors = await getKumaMonitors(statusSlug)
 
-  // Fetch domain expiration if configured for this project
+  // Fetch domain expiration if configured for this client
   let domainExpiration: DomainExpiration | null = null
-  const expDomain = typeof project?.domain_expiry_domain === 'string'
-    ? project.domain_expiry_domain
+  const expDomain = typeof profile?.domain_expiry_domain === 'string'
+    ? profile.domain_expiry_domain
     : null
   if (expDomain) {
     try {
       domainExpiration = await getDomainExpiration(expDomain)
     } catch {
+      // WHOIS failed gracefully — dashboard still loads
       domainExpiration = null
     }
   }
@@ -164,7 +155,7 @@ export default async function DashboardPage({ searchParams }: Props) {
     <div className="min-h-screen bg-slate-50 p-6">
       <div className="mx-auto max-w-7xl">
         <DashboardTabs
-          profile={project}
+          profile={profile}
           initialTickets={tickets}
           umamiStats={umamiStats}
           umamiPageviews={umamiPageviews}

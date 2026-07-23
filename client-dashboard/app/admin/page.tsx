@@ -34,36 +34,11 @@ export default async function AdminPage() {
     .eq('role', 'client')
     .order('updated_at', { ascending: false })
 
-  // Fetch all projects (may not exist before migration)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let projects: any[] = []
-  try {
-    const { data } = await supabaseAdmin
-      .from('projects')
-      .select('*')
-      .order('updated_at', { ascending: false })
-    projects = data ?? []
-  } catch {
-    // Table may not exist yet — fall back to profiles for company names below
-  }
-
-  // Fetch all project members (may not exist before migration)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let projectMembers: any[] = []
-  try {
-    const { data } = await supabaseAdmin
-      .from('project_members')
-      .select('*')
-    projectMembers = data ?? []
-  } catch {
-    // Table may not exist yet
-  }
-
-  // Build maps: user_id → email, user_id → project_id
+  // Build maps from clients: user ID → email, user ID → company name
   const emailMap: Record<string, string> = {}
-  const userProjectMap: Record<string, string> = {}
-  for (const pm of projectMembers) {
-    userProjectMap[pm.user_id] = pm.project_id
+  const companyNameMap: Record<string, string> = {}
+  for (const c of clients ?? []) {
+    companyNameMap[c.id] = c.company_name || ''
   }
   try {
     const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers()
@@ -76,13 +51,6 @@ export default async function AdminPage() {
     }
   } catch {
     // Admin client not configured
-  }
-
-  // Build project ID → project lookup
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const projectMap: Record<string, any> = {}
-  for (const p of projects) {
-    projectMap[p.id] = p
   }
 
   // Fetch all tickets with messages
@@ -119,10 +87,8 @@ export default async function AdminPage() {
 
         <AdminTabs
           clients={clients ?? []}
-          projects={projects ?? []}
           emailMap={emailMap}
-          userProjectMap={userProjectMap}
-          projectMap={projectMap}
+          companyNameMap={companyNameMap}
           tickets={tickets ?? []}
           allInvoices={allInvoices ?? []}
         />

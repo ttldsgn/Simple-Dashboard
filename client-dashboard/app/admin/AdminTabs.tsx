@@ -19,18 +19,12 @@ interface KumaBadge {
 
 interface ClientProfile {
   id: string
-  role: string
-  created_at?: string
-  updated_at?: string
-}
-
-interface Project {
-  id: string
   company_name: string | null
   umami_website_id: string | null
   kuma_status_slug: string | null
   kuma_badges?: KumaBadge[] | null
   domain_expiry_domain?: string | null
+  role: string
   created_at?: string
   updated_at?: string
 }
@@ -47,7 +41,6 @@ interface TicketMessage {
 interface Ticket {
   id: string
   client_id: string
-  project_id: string
   title: string
   description: string
   status: 'open' | 'in_progress' | 'resolved' | 'closed'
@@ -57,10 +50,17 @@ interface Ticket {
   ticket_messages?: TicketMessage[]
 }
 
+interface Props {
+  clients: ClientProfile[]
+  emailMap: Record<string, string>
+  companyNameMap: Record<string, string>
+  tickets: Ticket[]
+  allInvoices: Invoice[]
+}
+
 interface Invoice {
   id: string
   client_id: string
-  project_id: string
   invoice_date: string
   description: string
   amount: string
@@ -69,20 +69,9 @@ interface Invoice {
   created_at: string
 }
 
-interface Props {
-  clients: ClientProfile[]
-  projects: Project[]
-  emailMap: Record<string, string>
-  userProjectMap: Record<string, string>
-  projectMap: Record<string, { company_name: string | null; id: string }>
-  tickets: Ticket[]
-  allInvoices: Invoice[]
-}
-
-export default function AdminTabs({ clients, projects, emailMap, userProjectMap, projectMap, tickets, allInvoices }: Props) {
+export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, allInvoices }: Props) {
   const [activeTab, setActiveTab] = useState<'clients' | 'invite' | 'tickets' | 'invoices'>('clients')
   const [editingClient, setEditingClient] = useState<ClientProfile | null>(null)
-  const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [message, setMessage] = useState('')
   const [inviteMessage, setInviteMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -93,10 +82,6 @@ export default function AdminTabs({ clients, projects, emailMap, userProjectMap,
   const [expandedTicket, setExpandedTicket] = useState<string | null>(null)
   const [ticketReply, setTicketReply] = useState('')
   const [ticketStatusMsg, setTicketStatusMsg] = useState('')
-
-  // Invite mode: 'existing' = add to existing project, 'new' = create new project
-  const [inviteMode, setInviteMode] = useState<'existing' | 'new'>('existing')
-  const [inviteSelectedProject, setInviteSelectedProject] = useState('')
 
   // Ticket bulk delete state
   const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set())
@@ -125,23 +110,15 @@ export default function AdminTabs({ clients, projects, emailMap, userProjectMap,
 
   useAutoLogout(30)
 
-  // Get the project for a given client
-  function getClientProject(clientId: string): Project | null {
-    const projectId = userProjectMap[clientId]
-    if (!projectId) return null
-    return projects.find(p => p.id === projectId) || null
-  }
-
-  function defaultBadges(project: Project): KumaBadge[] {
-    return (project.kuma_badges && Array.isArray(project.kuma_badges))
-      ? [...project.kuma_badges]
+  function defaultBadges(client: ClientProfile): KumaBadge[] {
+    return (client.kuma_badges && Array.isArray(client.kuma_badges))
+      ? [...client.kuma_badges]
       : []
   }
 
-  function startEdit(client: ClientProfile, project: Project) {
+  function startEdit(client: ClientProfile) {
     setEditingClient(client)
-    setEditingProject(project)
-    setEditBadges(defaultBadges(project))
+    setEditBadges(defaultBadges(client))
     setMessage('')
   }
 
@@ -167,11 +144,7 @@ export default function AdminTabs({ clients, projects, emailMap, userProjectMap,
     setIsSubmitting(true)
     setInviteMessage('')
     const formData = new FormData(event.currentTarget)
-    if (inviteMode === 'existing') {
-      formData.set('project_id', inviteSelectedProject)
-    } else {
-      formData.set('kuma_badges', JSON.stringify(inviteBadges.filter(b => b.label || b.url)))
-    }
+    formData.set('kuma_badges', JSON.stringify(inviteBadges.filter(b => b.label || b.url)))
     const result = await inviteUser(formData)
     if (result && 'error' in result && result.error) {
       setInviteMessage(`Error: ${result.error}`)
@@ -179,7 +152,6 @@ export default function AdminTabs({ clients, projects, emailMap, userProjectMap,
       setInviteMessage('Invitation sent successfully!')
       ;(event.target as HTMLFormElement).reset()
       setInviteBadges([])
-      setInviteSelectedProject('')
     }
     setIsSubmitting(false)
   }
@@ -196,7 +168,6 @@ export default function AdminTabs({ clients, projects, emailMap, userProjectMap,
     } else {
       setMessage('Client updated successfully!')
       setEditingClient(null)
-      setEditingProject(null)
       setEditBadges([])
     }
     setIsSubmitting(false)
@@ -293,20 +264,6 @@ export default function AdminTabs({ clients, projects, emailMap, userProjectMap,
         {status.replace('_', ' ')}
       </span>
     )
-  }
-
-  // Get company name for a ticket — look up by project_id
-  function getTicketCompanyName(ticket: Ticket): string {
-    if (ticket.project_id) {
-      const project = projectMap[ticket.project_id]
-      return project?.company_name || ''
-    }
-    return ''
-  }
-
-  // Get client email for a ticket — look up by client_id
-  function getTicketClientEmail(ticket: Ticket): string {
-    return emailMap[ticket.client_id] || 'Unknown'
   }
 
   // Toggle a single ticket selection
@@ -519,10 +476,10 @@ export default function AdminTabs({ clients, projects, emailMap, userProjectMap,
                               {getStatusBadge(ticket.status)}
                             </div>
                             <p className="text-sm text-slate-500">
-                              {getTicketCompanyName(ticket) && (
-                                <strong>{getTicketCompanyName(ticket)}</strong>
+                              {companyNameMap[ticket.client_id] && (
+                                <strong>{companyNameMap[ticket.client_id]}</strong>
                               )}{' '}
-                              {getTicketClientEmail(ticket)} · {new Date(ticket.created_at).toLocaleDateString()}
+                              {emailMap[ticket.client_id] || 'Unknown'} · {new Date(ticket.created_at).toLocaleDateString()}
                             </p>
                           </div>
                           <span className="text-xs text-slate-400 ml-4">
@@ -545,7 +502,7 @@ export default function AdminTabs({ clients, projects, emailMap, userProjectMap,
                                     : 'bg-slate-100 text-slate-800'
                                 }`}>
                                   <p className="text-xs font-medium mb-1">
-                                    {msg.sender_type === 'admin' ? 'Admin' : getTicketClientEmail(ticket)}
+                                    {msg.sender_type === 'admin' ? 'Admin' : emailMap[ticket.client_id] || 'Client'}
                                     <span className="font-normal text-slate-400 ml-2">
                                       {new Date(msg.created_at).toLocaleString()}
                                     </span>
@@ -631,30 +588,26 @@ export default function AdminTabs({ clients, projects, emailMap, userProjectMap,
           ) : (
             <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
               <div className="divide-y divide-slate-200">
-                {clients.map((client) => {
-                  const clientProject = getClientProject(client.id)
-                  const pId = clientProject?.id
-                  return (
+                {clients.map((client) => (
                   <div key={client.id} className="p-6">
-                    {editingClient?.id === client.id && editingProject ? (
+                    {editingClient?.id === client.id ? (
                       <form onSubmit={handleUpdateClient} className="space-y-4">
                         <input type="hidden" name="client_id" value={client.id} />
-                        <input type="hidden" name="project_id" value={editingProject.id} />
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                          <div><label className="block text-xs font-medium text-slate-500 mb-1">Company Name</label><input type="text" name="company_name" defaultValue={editingProject.company_name || ''} className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /></div>
-                          <div><label className="block text-xs font-medium text-slate-500 mb-1">Umami Website ID</label><input type="text" name="umami_website_id" defaultValue={editingProject.umami_website_id || ''} className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /></div>
-                          <div className="sm:col-span-2"><label className="block text-xs font-medium text-slate-500 mb-1">Kuma Status Slug</label><input type="text" name="kuma_status_slug" defaultValue={editingProject.kuma_status_slug || ''} className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /></div>
-                          <div className="sm:col-span-2"><label className="block text-xs font-medium text-slate-500 mb-1">Domain (Expiration Lookup)</label><input type="text" name="domain_expiry_domain" defaultValue={editingProject.domain_expiry_domain || ''} placeholder="e.g., example.com" className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /><p className="mt-1 text-xs text-slate-400">The domain to check WHOIS expiration for (e.g., example.com).</p></div>
+                          <div><label className="block text-xs font-medium text-slate-500 mb-1">Company Name</label><input type="text" name="company_name" defaultValue={client.company_name || ''} className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /></div>
+                          <div><label className="block text-xs font-medium text-slate-500 mb-1">Umami Website ID</label><input type="text" name="umami_website_id" defaultValue={client.umami_website_id || ''} className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /></div>
+                          <div className="sm:col-span-2"><label className="block text-xs font-medium text-slate-500 mb-1">Kuma Status Slug</label><input type="text" name="kuma_status_slug" defaultValue={client.kuma_status_slug || ''} className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /></div>
+                          <div className="sm:col-span-2"><label className="block text-xs font-medium text-slate-500 mb-1">Domain (Expiration Lookup)</label><input type="text" name="domain_expiry_domain" defaultValue={client.domain_expiry_domain || ''} placeholder="e.g., example.com" className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /><p className="mt-1 text-xs text-slate-400">The domain to check WHOIS expiration for (e.g., example.com).</p></div>
                           <div className="sm:col-span-2">{renderBadgeFields(editBadges, setEditBadges)}</div>
                         </div>
                         <div className="flex gap-3 pt-2">
                           <button type="submit" disabled={isSubmitting} className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50">{isSubmitting ? 'Saving...' : 'Save'}</button>
-                          <button type="button" onClick={() => { setEditingClient(null); setEditingProject(null); setEditBadges([]); setMessage('') }} className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button>
+                          <button type="button" onClick={() => { setEditingClient(null); setEditBadges([]); setMessage('') }} className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button>
                         </div>
                       </form>
                     ) : deleteConfirmId === client.id ? (
                       <div className="space-y-4">
-                        <p className="text-sm text-slate-700">Are you sure you want to permanently delete <strong>{clientProject?.company_name || emailMap[client.id] || 'this client'}</strong>? This will remove their account and all data.</p>
+                        <p className="text-sm text-slate-700">Are you sure you want to permanently delete <strong>{client.company_name || emailMap[client.id] || 'this client'}</strong>? This will remove their account and all data.</p>
                         <div className="flex gap-3">
                           <button type="button" onClick={() => handleDeleteClient(client.id)} disabled={isSubmitting} className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-50">{isSubmitting ? 'Deleting...' : 'Yes, Delete'}</button>
                           <button type="button" onClick={() => setDeleteConfirmId(null)} className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button>
@@ -663,11 +616,11 @@ export default function AdminTabs({ clients, projects, emailMap, userProjectMap,
                     ) : (
                       <div className="flex items-start justify-between">
                         <div className="space-y-1">
-                          <h4 className="text-md font-semibold text-slate-900">{clientProject?.company_name || emailMap[client.id] || 'Unnamed Client'}</h4>
+                          <h4 className="text-md font-semibold text-slate-900">{client.company_name || emailMap[client.id] || 'Unnamed Client'}</h4>
                           <p className="text-sm text-slate-500">{emailMap[client.id] || 'No email'}</p>
-                          <div className="flex gap-4 mt-2 text-xs text-slate-400"><span>Umami ID: {clientProject?.umami_website_id || '—'}</span><span>Kuma Slug: {clientProject?.kuma_status_slug || '—'}</span></div>
-                          {clientProject?.kuma_badges && Array.isArray(clientProject.kuma_badges) && clientProject.kuma_badges.length > 0 && (
-                            <div className="flex gap-2 mt-1 flex-wrap">{clientProject.kuma_badges.map((b, i) => (<span key={i} className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{b.label || 'Badge'}</span>))}</div>
+                          <div className="flex gap-4 mt-2 text-xs text-slate-400"><span>Umami ID: {client.umami_website_id || '—'}</span><span>Kuma Slug: {client.kuma_status_slug || '—'}</span></div>
+                          {client.kuma_badges && Array.isArray(client.kuma_badges) && client.kuma_badges.length > 0 && (
+                            <div className="flex gap-2 mt-1 flex-wrap">{client.kuma_badges.map((b, i) => (<span key={i} className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{b.label || 'Badge'}</span>))}</div>
                           )}
                           {client.created_at && (<p className="text-xs text-slate-400 pt-1">Joined {new Date(client.created_at).toLocaleDateString()}</p>)}
                           {resendStatus[client.id] && (<p className={`text-xs ${resendStatus[client.id].includes('Error') ? 'text-red-600' : 'text-green-600'}`}>{resendStatus[client.id]}</p>)}
@@ -677,17 +630,14 @@ export default function AdminTabs({ clients, projects, emailMap, userProjectMap,
                             className="rounded-md border border-indigo-200 bg-white px-3 py-1.5 text-xs font-medium text-indigo-600 shadow-sm hover:bg-indigo-50">
                             View Dashboard
                           </a>
-                          {clientProject && (
-                            <button onClick={() => startEdit(client, clientProject)} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50">Edit</button>
-                          )}
+                          <button onClick={() => startEdit(client)} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50">Edit</button>
                           <button onClick={() => handleResendInvite(client.id)} disabled={resendStatus[client.id] === 'sending'} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-50">{resendStatus[client.id] === 'sending' ? 'Sending...' : 'Resend Invite'}</button>
                           <button onClick={() => setDeleteConfirmId(client.id)} className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 shadow-sm hover:bg-red-50">Delete</button>
                         </div>
                       </div>
                     )}
                   </div>
-                  )
-                })}
+                ))}
               </div>
             </div>
           )}
@@ -744,14 +694,11 @@ export default function AdminTabs({ clients, projects, emailMap, userProjectMap,
                   className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 >
                   <option value="">Select a client...</option>
-                  {clients.map((c) => {
-                    const cp = getClientProject(c.id)
-                    return (
+                  {clients.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {cp?.company_name || emailMap[c.id] || 'Unnamed Client'}
+                      {c.company_name || emailMap[c.id] || 'Unnamed Client'}
                     </option>
-                    )
-                  })}
+                  ))}
                 </select>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -826,14 +773,11 @@ export default function AdminTabs({ clients, projects, emailMap, userProjectMap,
               className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             >
               <option value="">All Clients</option>
-              {clients.map((c) => {
-                const cp = getClientProject(c.id)
-                return (
+              {clients.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {cp?.company_name || emailMap[c.id] || 'Unnamed Client'}
+                  {c.company_name || emailMap[c.id] || 'Unnamed Client'}
                 </option>
-                )
-              })}
+              ))}
             </select>
             <select
               value={invFilterStatus}
@@ -877,8 +821,7 @@ export default function AdminTabs({ clients, projects, emailMap, userProjectMap,
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
                     {filtered.map((inv) => {
-                      const clientProject = getClientProject(inv.client_id)
-                      const clientName = clientProject?.company_name || emailMap[inv.client_id] || 'Unknown'
+                      const clientName = companyNameMap[inv.client_id] || emailMap[inv.client_id] || 'Unknown'
                       return (
                         <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
                           <td className="px-4 py-3 whitespace-nowrap text-slate-700">{clientName}</td>
@@ -1012,69 +955,13 @@ export default function AdminTabs({ clients, projects, emailMap, userProjectMap,
           <h3 className="text-lg font-medium text-slate-900 mb-2">Invite a New Client</h3>
           <p className="text-sm text-slate-500 mb-6">Send an invitation email. The client will set their password and access their personalized dashboard.</p>
           {inviteMessage && (<div className={`rounded-md p-3 mb-4 text-sm ${inviteMessage.includes('successfully') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{inviteMessage}</div>)}
-
-          {/* Project selection mode toggle */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-slate-700 mb-3">Project Assignment</label>
-            <div className="flex rounded-lg border border-slate-300 bg-slate-50 p-1">
-              <button
-                type="button"
-                onClick={() => setInviteMode('existing')}
-                className={`flex-1 rounded-md py-2 px-3 text-sm font-medium transition-colors ${
-                  inviteMode === 'existing'
-                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Add to Existing Project
-              </button>
-              <button
-                type="button"
-                onClick={() => setInviteMode('new')}
-                className={`flex-1 rounded-md py-2 px-3 text-sm font-medium transition-colors ${
-                  inviteMode === 'new'
-                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                Create New Project
-              </button>
-            </div>
-          </div>
-
           <form onSubmit={handleInvite} className="space-y-4">
             <div><label htmlFor="email" className="block text-sm font-medium text-slate-700">Email Address <span className="text-red-500">*</span></label><input type="email" id="email" name="email" required placeholder="client@example.com" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /></div>
-
-            {inviteMode === 'existing' ? (
-              <div>
-                <label htmlFor="inv_project" className="block text-sm font-medium text-slate-700">Select Project <span className="text-red-500">*</span></label>
-                <select
-                  id="inv_project"
-                  value={inviteSelectedProject}
-                  onChange={(e) => setInviteSelectedProject(e.target.value)}
-                  required
-                  className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                >
-                  <option value="">Choose a project...</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.company_name || 'Unnamed Project'}
-                    </option>
-                  ))}
-                </select>
-                {projects.length === 0 && (
-                  <p className="mt-2 text-xs text-amber-600">No projects exist yet. Switch to "Create New Project" to create one, or migrate existing clients first.</p>
-                )}
-              </div>
-            ) : (
-              <>
-                <div><label htmlFor="company_name" className="block text-sm font-medium text-slate-700">Company Name <span className="text-red-500">*</span></label><input type="text" id="company_name" name="company_name" required placeholder="Acme Corp" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /></div>
-                <div><label htmlFor="umami_website_id" className="block text-sm font-medium text-slate-700">Umami Website ID</label><input type="text" id="umami_website_id" name="umami_website_id" placeholder="Leave blank for global default" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /><p className="mt-1 text-xs text-slate-400">Found in Umami → Settings → Websites.</p></div>
-                <div><label htmlFor="kuma_status_slug" className="block text-sm font-medium text-slate-700">Kuma Status Page Slug</label><input type="text" id="kuma_status_slug" name="kuma_status_slug" placeholder="Leave blank for global default" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /><p className="mt-1 text-xs text-slate-400">The URL path after /status/ in Kuma.</p></div>
-                <div><label htmlFor="inv_domain_expiry_domain" className="block text-sm font-medium text-slate-700">Domain (for expiration lookup)</label><input type="text" id="inv_domain_expiry_domain" name="domain_expiry_domain" placeholder="e.g., example.com" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /><p className="mt-1 text-xs text-slate-400">The domain to check WHOIS expiration for (e.g., example.com).</p></div>
-                <div>{renderBadgeFields(inviteBadges, setInviteBadges)}</div>
-              </>
-            )}
+            <div><label htmlFor="company_name" className="block text-sm font-medium text-slate-700">Company Name</label><input type="text" id="company_name" name="company_name" placeholder="Acme Corp" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /></div>
+            <div><label htmlFor="umami_website_id" className="block text-sm font-medium text-slate-700">Umami Website ID</label><input type="text" id="umami_website_id" name="umami_website_id" placeholder="Leave blank for global default" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /><p className="mt-1 text-xs text-slate-400">Found in Umami → Settings → Websites.</p></div>
+            <div><label htmlFor="kuma_status_slug" className="block text-sm font-medium text-slate-700">Kuma Status Page Slug</label><input type="text" id="kuma_status_slug" name="kuma_status_slug" placeholder="Leave blank for global default" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /><p className="mt-1 text-xs text-slate-400">The URL path after /status/ in Kuma.</p></div>
+            <div><label htmlFor="inv_domain_expiry_domain" className="block text-sm font-medium text-slate-700">Domain (for expiration lookup)</label><input type="text" id="inv_domain_expiry_domain" name="domain_expiry_domain" placeholder="e.g., example.com" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /><p className="mt-1 text-xs text-slate-400">The domain to check WHOIS expiration for (e.g., example.com).</p></div>
+            <div>{renderBadgeFields(inviteBadges, setInviteBadges)}</div>
             <button type="submit" disabled={isSubmitting} className="inline-flex justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50">{isSubmitting ? 'Sending Invitation...' : 'Send Invitation'}</button>
           </form>
         </div>

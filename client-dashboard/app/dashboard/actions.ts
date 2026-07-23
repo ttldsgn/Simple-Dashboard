@@ -21,15 +21,6 @@ export async function createTicket(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
 
-  // Get user's project
-  const { data: membership } = await supabase
-    .from('project_members')
-    .select('project_id')
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  if (!membership?.project_id) throw new Error('No project found for this user')
-
   const title = formData.get('title') as string
   const description = formData.get('description') as string
   const file = formData.get('attachment') as File | null
@@ -70,7 +61,6 @@ export async function createTicket(formData: FormData) {
     .from('tickets')
     .insert({
       client_id: user.id,
-      project_id: membership.project_id,
       title,
       description,
       status: 'open',
@@ -252,18 +242,10 @@ export async function addInvoice(formData: FormData) {
   if (!clientId || !description || !zohoLink) throw new Error('Required fields missing')
   if (status !== 'paid' && status !== 'open') throw new Error('Invalid status')
 
-  // Get the project_id for this client
-  const { data: membership } = await supabaseAdmin
-    .from('project_members')
-    .select('project_id')
-    .eq('user_id', clientId)
-    .maybeSingle()
-
   const { error } = await supabaseAdmin
     .from('invoices')
     .insert({
       client_id: clientId,
-      project_id: membership?.project_id || null,
       invoice_date: invoiceDate || new Date().toISOString().split('T')[0],
       description,
       amount,
