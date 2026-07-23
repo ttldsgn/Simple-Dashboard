@@ -4,6 +4,6 @@
   "private": true,
   "scripts": {
     "build": "cp .env client-dashboard/.env 2>/dev/null; cd client-dashboard && npm ci && npm run build",
-    "start": "lsof -ti:3003 | xargs -r kill -9 2>/dev/null; sleep 2; cd client-dashboard && npm run start -- -p 3003"
+    "start": "cd client-dashboard && npx next start -p ${PORT:-3003}"
   }
 }

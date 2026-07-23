@@ -34,21 +34,35 @@ export default async function AdminPage() {
     .eq('role', 'client')
     .order('updated_at', { ascending: false })
 
-  // Fetch all projects
-  const { data: projects } = await supabaseAdmin
-    .from('projects')
-    .select('*')
-    .order('updated_at', { ascending: false })
+  // Fetch all projects (may not exist before migration)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let projects: any[] = []
+  try {
+    const { data } = await supabaseAdmin
+      .from('projects')
+      .select('*')
+      .order('updated_at', { ascending: false })
+    projects = data ?? []
+  } catch {
+    // Table may not exist yet — fall back to profiles for company names below
+  }
 
-  // Fetch all project members (user_id → project_id mapping)
-  const { data: projectMembers } = await supabaseAdmin
-    .from('project_members')
-    .select('*')
+  // Fetch all project members (may not exist before migration)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let projectMembers: any[] = []
+  try {
+    const { data } = await supabaseAdmin
+      .from('project_members')
+      .select('*')
+    projectMembers = data ?? []
+  } catch {
+    // Table may not exist yet
+  }
 
   // Build maps: user_id → email, user_id → project_id
   const emailMap: Record<string, string> = {}
   const userProjectMap: Record<string, string> = {}
-  for (const pm of projectMembers ?? []) {
+  for (const pm of projectMembers) {
     userProjectMap[pm.user_id] = pm.project_id
   }
   try {
@@ -65,8 +79,9 @@ export default async function AdminPage() {
   }
 
   // Build project ID → project lookup
-  const projectMap: Record<string, { company_name: string | null; id: string }> = {}
-  for (const p of projects ?? []) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const projectMap: Record<string, any> = {}
+  for (const p of projects) {
     projectMap[p.id] = p
   }
 
