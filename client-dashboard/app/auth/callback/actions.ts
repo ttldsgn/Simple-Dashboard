@@ -67,7 +67,9 @@ export async function requestPasswordReset(formData: FormData) {
 
 /**
  * Admin-only: invite a new client user by email.
- * Creates the auth user (via invite) and the profiles row with settings.
+ * Supports two modes:
+ * 1. Add to existing project: provide `project_id`
+ * 2. Create new project: provide `company_name` (and optional settings)
  */
 export async function inviteUser(formData: FormData) {
   const supabaseAdmin = createAdminClient()
@@ -93,6 +95,7 @@ export async function inviteUser(formData: FormData) {
   }
 
   const email = formData.get('email') as string
+  const existingProjectId = formData.get('project_id') as string
   const companyName = formData.get('company_name') as string
   const umamiWebsiteId = formData.get('umami_website_id') as string
   const kumaStatusSlug = formData.get('kuma_status_slug') as string
@@ -123,23 +126,88 @@ export async function inviteUser(formData: FormData) {
     return { error: inviteError.message }
   }
 
-  // Create the profiles row for the new user
-  if (inviteData.user) {
-    const { error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .upsert({
-        id: inviteData.user.id,
-        company_name: companyName || null,
-        umami_website_id: umamiWebsiteId || null,
-        kuma_status_slug: kumaStatusSlug || null,
-        kuma_badges: kumaBadges,
-        domain_expiry_domain: domainExpiryDomain || null,
-        role: 'client',
-        updated_at: new Date().toISOString(),
-      })
+  if (!inviteData.user) {
+    return { error: 'Failed to invite user' }
+  }
 
-    if (profileError) {
-      return { error: `User invited but profile creation failed: ${profileError.message}` }
+  // Create the profiles row for the new user (role only)
+  const { error: profileError } = await supabaseAdmin
+    .from('profiles')
+    .upsert({
+      id: inviteData.user.id,
+      company_name: companyName || null,
+      umami_website_id: umamiWebsiteId || null,
+      kuma_status_slug: kumaStatusSlug || null,
+      kuma_badges: kumaBadges,
+      domain_expiry_domain: domainExpiryDomain || null,
+      role: 'client',
+      updated_at: new Date().toISOString(),
+    })
+
+  if (profileError) {
+    return { error: `User invited but profile creation failed: ${profileError.message}` }
+  }
+
+  // Determine which project to add the user to
+  let targetProjectId: string | null = null
+
+  if (existingProjectId) {
+    // Mode 1: Add to existing project
+    try {
+      const { data: existingProject } = await supabaseAdmin
+        .from('projects')
+        .select('id')
+        .eq('id', existingProjectId)
+        .maybeSingle()
+
+      if (!existingProject) {
+        return { error: 'Selected project not found' }
+      }
+      targetProjectId = existingProjectId
+    } catch {
+      return { error: 'Projects table not available yet — run the migration first' }
+    }
+  } else if (companyName) {
+    // Mode 2: Create a new project
+    try {
+      const { data: newProject, error: projectErr } = await supabaseAdmin
+        .from('projects')
+        .insert({
+          company_name: companyName,
+          umami_website_id: umamiWebsiteId || null,
+          kuma_status_slug: kumaStatusSlug || null,
+          kuma_badges: kumaBadges.length > 0 ? kumaBadges : null,
+          domain_expiry_domain: domainExpiryDomain || null,
+        })
+        .select('id')
+        .single()
+
+      if (projectErr || !newProject) {
+        return { error: `Failed to create project: ${projectErr?.message || 'Unknown error'}` }
+      }
+      targetProjectId = newProject.id
+    } catch {
+      return { error: 'Projects table not available yet — run the migration first' }
+    }
+  }
+
+  // If we have a target project, add the user as a member
+  if (targetProjectId) {
+    try {
+      const { error: memberError } = await supabaseAdmin
+        .from('project_members')
+        .insert({
+          project_id: targetProjectId,
+          user_id: inviteData.user.id,
+          role: 'member',
+        })
+
+      if (memberError) {
+        // Non-fatal: user is still invited with profile
+        console.error('Failed to add project membership:', memberError.message)
+      }
+    } catch {
+      // Project members table may not exist yet — non-fatal
     }
   }
 
@@ -149,6 +217,7 @@ export async function inviteUser(formData: FormData) {
 
 /**
  * Admin-only: update an existing client's settings.
+ * Also updates the projects table if it exists.
  */
 export async function updateClient(formData: FormData) {
   const supabaseAdmin = createAdminClient()
@@ -174,6 +243,7 @@ export async function updateClient(formData: FormData) {
   }
 
   const clientId = formData.get('client_id') as string
+  const projectId = formData.get('project_id') as string
   const companyName = formData.get('company_name') as string
   const umamiWebsiteId = formData.get('umami_website_id') as string
   const kumaStatusSlug = formData.get('kuma_status_slug') as string
@@ -206,6 +276,7 @@ export async function updateClient(formData: FormData) {
     updateData.kuma_badges = kumaBadges
   }
 
+  // Update the profiles table (backward compatible)
   const { error } = await supabaseAdmin
     .from('profiles')
     .update(updateData)
@@ -213,6 +284,18 @@ export async function updateClient(formData: FormData) {
 
   if (error) {
     return { error: error.message }
+  }
+
+  // Also update the projects table if a project_id was provided
+  if (projectId) {
+    try {
+      await supabaseAdmin
+        .from('projects')
+        .update({ ...updateData, updated_at: new Date().toISOString() })
+        .eq('id', projectId)
+    } catch {
+      // Projects table may not exist yet — non-fatal
+    }
   }
 
   revalidatePath('/admin')

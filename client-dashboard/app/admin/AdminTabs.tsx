@@ -54,6 +54,11 @@ interface Props {
   clients: ClientProfile[]
   emailMap: Record<string, string>
   companyNameMap: Record<string, string>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  projects: any[]
+  userProjectMap: Record<string, string>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  projectMap: Record<string, any>
   tickets: Ticket[]
   allInvoices: Invoice[]
 }
@@ -69,7 +74,7 @@ interface Invoice {
   created_at: string
 }
 
-export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, allInvoices }: Props) {
+export default function AdminTabs({ clients, emailMap, companyNameMap, projects, userProjectMap, projectMap, tickets, allInvoices }: Props) {
   const [activeTab, setActiveTab] = useState<'clients' | 'invite' | 'tickets' | 'invoices'>('clients')
   const [editingClient, setEditingClient] = useState<ClientProfile | null>(null)
   const [message, setMessage] = useState('')
@@ -82,6 +87,10 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, 
   const [expandedTicket, setExpandedTicket] = useState<string | null>(null)
   const [ticketReply, setTicketReply] = useState('')
   const [ticketStatusMsg, setTicketStatusMsg] = useState('')
+
+  // Invite mode: 'existing' = add to existing project, 'new' = create new project
+  const [inviteMode, setInviteMode] = useState<'existing' | 'new'>('existing')
+  const [inviteSelectedProject, setInviteSelectedProject] = useState('')
 
   // Ticket bulk delete state
   const [selectedTickets, setSelectedTickets] = useState<Set<string>>(new Set())
@@ -144,7 +153,11 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, 
     setIsSubmitting(true)
     setInviteMessage('')
     const formData = new FormData(event.currentTarget)
-    formData.set('kuma_badges', JSON.stringify(inviteBadges.filter(b => b.label || b.url)))
+    if (inviteMode === 'existing') {
+      formData.set('project_id', inviteSelectedProject)
+    } else {
+      formData.set('kuma_badges', JSON.stringify(inviteBadges.filter(b => b.label || b.url)))
+    }
     const result = await inviteUser(formData)
     if (result && 'error' in result && result.error) {
       setInviteMessage(`Error: ${result.error}`)
@@ -152,6 +165,7 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, 
       setInviteMessage('Invitation sent successfully!')
       ;(event.target as HTMLFormElement).reset()
       setInviteBadges([])
+      setInviteSelectedProject('')
     }
     setIsSubmitting(false)
   }
@@ -162,6 +176,11 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, 
     setMessage('')
     const formData = new FormData(event.currentTarget)
     formData.set('kuma_badges', JSON.stringify(editBadges.filter(b => b.label || b.url)))
+    // Include project_id if we have it for this client
+    const projectId = userProjectMap[editingClient?.id || '']
+    if (projectId) {
+      formData.set('project_id', projectId)
+    }
     const result = await updateClient(formData)
     if (result && 'error' in result && result.error) {
       setMessage(`Error: ${result.error}`)
@@ -955,13 +974,69 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, 
           <h3 className="text-lg font-medium text-slate-900 mb-2">Invite a New Client</h3>
           <p className="text-sm text-slate-500 mb-6">Send an invitation email. The client will set their password and access their personalized dashboard.</p>
           {inviteMessage && (<div className={`rounded-md p-3 mb-4 text-sm ${inviteMessage.includes('successfully') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{inviteMessage}</div>)}
+
+          {/* Project selection mode toggle */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-slate-700 mb-3">Project Assignment</label>
+            <div className="flex rounded-lg border border-slate-300 bg-slate-50 p-1">
+              <button
+                type="button"
+                onClick={() => setInviteMode('existing')}
+                className={`flex-1 rounded-md py-2 px-3 text-sm font-medium transition-colors ${
+                  inviteMode === 'existing'
+                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Add to Existing Project
+              </button>
+              <button
+                type="button"
+                onClick={() => setInviteMode('new')}
+                className={`flex-1 rounded-md py-2 px-3 text-sm font-medium transition-colors ${
+                  inviteMode === 'new'
+                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Create New Project
+              </button>
+            </div>
+          </div>
+
           <form onSubmit={handleInvite} className="space-y-4">
             <div><label htmlFor="email" className="block text-sm font-medium text-slate-700">Email Address <span className="text-red-500">*</span></label><input type="email" id="email" name="email" required placeholder="client@example.com" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /></div>
-            <div><label htmlFor="company_name" className="block text-sm font-medium text-slate-700">Company Name</label><input type="text" id="company_name" name="company_name" placeholder="Acme Corp" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /></div>
-            <div><label htmlFor="umami_website_id" className="block text-sm font-medium text-slate-700">Umami Website ID</label><input type="text" id="umami_website_id" name="umami_website_id" placeholder="Leave blank for global default" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /><p className="mt-1 text-xs text-slate-400">Found in Umami → Settings → Websites.</p></div>
-            <div><label htmlFor="kuma_status_slug" className="block text-sm font-medium text-slate-700">Kuma Status Page Slug</label><input type="text" id="kuma_status_slug" name="kuma_status_slug" placeholder="Leave blank for global default" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /><p className="mt-1 text-xs text-slate-400">The URL path after /status/ in Kuma.</p></div>
-            <div><label htmlFor="inv_domain_expiry_domain" className="block text-sm font-medium text-slate-700">Domain (for expiration lookup)</label><input type="text" id="inv_domain_expiry_domain" name="domain_expiry_domain" placeholder="e.g., example.com" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /><p className="mt-1 text-xs text-slate-400">The domain to check WHOIS expiration for (e.g., example.com).</p></div>
-            <div>{renderBadgeFields(inviteBadges, setInviteBadges)}</div>
+
+            {inviteMode === 'existing' ? (
+              <div>
+                <label htmlFor="inv_project" className="block text-sm font-medium text-slate-700">Select Project <span className="text-red-500">*</span></label>
+                <select
+                  id="inv_project"
+                  value={inviteSelectedProject}
+                  onChange={(e) => setInviteSelectedProject(e.target.value)}
+                  required
+                  className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                >
+                  <option value="">Choose a project...</option>
+                  {projects.map((p: { id: string; company_name?: string | null }) => (
+                    <option key={p.id} value={p.id}>
+                      {p.company_name || 'Unnamed Project'}
+                    </option>
+                  ))}
+                </select>
+                {projects.length === 0 && (
+                  <p className="mt-2 text-xs text-amber-600">No projects exist yet. Switch to Create New Project to create one, or run the migration to create projects for existing clients.</p>
+                )}
+              </div>
+            ) : (
+              <>
+                <div><label htmlFor="company_name" className="block text-sm font-medium text-slate-700">Company Name <span className="text-red-500">*</span></label><input type="text" id="company_name" name="company_name" required placeholder="Acme Corp" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /></div>
+                <div><label htmlFor="umami_website_id" className="block text-sm font-medium text-slate-700">Umami Website ID</label><input type="text" id="umami_website_id" name="umami_website_id" placeholder="Leave blank for global default" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /><p className="mt-1 text-xs text-slate-400">Found in Umami → Settings → Websites.</p></div>
+                <div><label htmlFor="kuma_status_slug" className="block text-sm font-medium text-slate-700">Kuma Status Page Slug</label><input type="text" id="kuma_status_slug" name="kuma_status_slug" placeholder="Leave blank for global default" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /><p className="mt-1 text-xs text-slate-400">The URL path after /status/ in Kuma.</p></div>
+                <div><label htmlFor="inv_domain_expiry_domain" className="block text-sm font-medium text-slate-700">Domain (for expiration lookup)</label><input type="text" id="inv_domain_expiry_domain" name="domain_expiry_domain" placeholder="e.g., example.com" className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" /><p className="mt-1 text-xs text-slate-400">The domain to check WHOIS expiration for (e.g., example.com).</p></div>
+                <div>{renderBadgeFields(inviteBadges, setInviteBadges)}</div>
+              </>
+            )}
             <button type="submit" disabled={isSubmitting} className="inline-flex justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50">{isSubmitting ? 'Sending Invitation...' : 'Send Invitation'}</button>
           </form>
         </div>

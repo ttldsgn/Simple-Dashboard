@@ -53,6 +53,34 @@ export default async function AdminPage() {
     // Admin client not configured
   }
 
+  // Fetch projects and members (may not exist before migration)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let projects: any[] = []
+  let userProjectMap: Record<string, string> = {}
+  try {
+    const { data: projectData } = await supabaseAdmin
+      .from('projects')
+      .select('*')
+      .order('updated_at', { ascending: false })
+    projects = projectData ?? []
+
+    const { data: memberData } = await supabaseAdmin
+      .from('project_members')
+      .select('*')
+    for (const pm of memberData ?? []) {
+      userProjectMap[pm.user_id] = pm.project_id
+    }
+  } catch {
+    // Projects/members tables may not exist yet
+  }
+
+  // Build project ID → project lookup
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const projectMap: Record<string, any> = {}
+  for (const p of projects) {
+    projectMap[p.id] = p
+  }
+
   // Fetch all tickets with messages
   const { data: tickets } = await supabaseAdmin
     .from('tickets')
@@ -87,8 +115,11 @@ export default async function AdminPage() {
 
         <AdminTabs
           clients={clients ?? []}
+          projects={projects}
           emailMap={emailMap}
           companyNameMap={companyNameMap}
+          userProjectMap={userProjectMap}
+          projectMap={projectMap}
           tickets={tickets ?? []}
           allInvoices={allInvoices ?? []}
         />
