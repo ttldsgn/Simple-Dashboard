@@ -34,11 +34,22 @@ export default async function AdminPage() {
     .eq('role', 'client')
     .order('updated_at', { ascending: false })
 
-  // Build maps from clients: user ID → email, user ID → company name
+  // Fetch all projects
+  const { data: projects } = await supabaseAdmin
+    .from('projects')
+    .select('*')
+    .order('updated_at', { ascending: false })
+
+  // Fetch all project members (user_id → project_id mapping)
+  const { data: projectMembers } = await supabaseAdmin
+    .from('project_members')
+    .select('*')
+
+  // Build maps: user_id → email, user_id → project_id
   const emailMap: Record<string, string> = {}
-  const companyNameMap: Record<string, string> = {}
-  for (const c of clients ?? []) {
-    companyNameMap[c.id] = c.company_name || ''
+  const userProjectMap: Record<string, string> = {}
+  for (const pm of projectMembers ?? []) {
+    userProjectMap[pm.user_id] = pm.project_id
   }
   try {
     const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers()
@@ -51,6 +62,12 @@ export default async function AdminPage() {
     }
   } catch {
     // Admin client not configured
+  }
+
+  // Build project ID → project lookup
+  const projectMap: Record<string, { company_name: string | null; id: string }> = {}
+  for (const p of projects ?? []) {
+    projectMap[p.id] = p
   }
 
   // Fetch all tickets with messages
@@ -87,8 +104,10 @@ export default async function AdminPage() {
 
         <AdminTabs
           clients={clients ?? []}
+          projects={projects ?? []}
           emailMap={emailMap}
-          companyNameMap={companyNameMap}
+          userProjectMap={userProjectMap}
+          projectMap={projectMap}
           tickets={tickets ?? []}
           allInvoices={allInvoices ?? []}
         />
