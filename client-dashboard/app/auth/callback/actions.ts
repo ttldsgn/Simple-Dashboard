@@ -272,27 +272,8 @@ export async function updateClient(formData: FormData) {
     updateData.kuma_badges = kumaBadges
   }
 
-  // Update the profiles table — only minimal fields (company_name etc. may have been dropped)
-  try {
-    const { error: profileErr } = await supabaseAdmin
-      .from('profiles')
-      .update({
-        company_name: companyName || null,
-        umami_website_id: umamiWebsiteId || null,
-        kuma_status_slug: kumaStatusSlug || null,
-        domain_expiry_domain: domainExpiryDomain || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', clientId)
-
-    if (profileErr) {
-      return { error: profileErr.message }
-    }
-  } catch {
-    // Columns may have been dropped by migration — fall through to projects update
-  }
-
-  // Also update the projects table if a project_id was explicitly provided
+  // Update the projects table only — all business settings live here
+  // profiles table only keeps role + updated_at, project columns were dropped by migration
   if (projectId) {
     try {
       await supabaseAdmin
