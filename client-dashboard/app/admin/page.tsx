@@ -99,27 +99,36 @@ export default async function AdminPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const clients: any[] = []
 
-  // Add clients that have profiles
+  // Add clients that have profiles — enrich with project data for display/edit forms
   for (const c of profileClients ?? []) {
     if (c.role === 'client') {
       seenUserIds.add(c.id)
-      clients.push(c)
+      const projectId = userProjectMap[c.id]
+      const project = projectId ? projectMap[projectId] : null
+      clients.push({
+        ...c,
+        company_name: c.company_name || project?.company_name || null,
+        umami_website_id: c.umami_website_id ?? project?.umami_website_id ?? null,
+        kuma_status_slug: c.kuma_status_slug ?? project?.kuma_status_slug ?? null,
+        kuma_badges: c.kuma_badges ?? project?.kuma_badges ?? null,
+        domain_expiry_domain: c.domain_expiry_domain ?? project?.domain_expiry_domain ?? null,
+      })
     }
   }
 
   // Add clients discovered from project_members that don't have profiles
-  // These are users whose profiles were deleted but who still have project memberships
   for (const userId of Object.keys(userProjectMap)) {
     if (!seenUserIds.has(userId)) {
       seenUserIds.add(userId)
+      const project = projectMap[userProjectMap[userId]]
       clients.push({
         id: userId,
         role: 'client',
-        company_name: companyNameMap[userId] || null,
-        umami_website_id: null,
-        kuma_status_slug: null,
-        kuma_badges: null,
-        domain_expiry_domain: null,
+        company_name: project?.company_name || null,
+        umami_website_id: project?.umami_website_id ?? null,
+        kuma_status_slug: project?.kuma_status_slug ?? null,
+        kuma_badges: project?.kuma_badges ?? null,
+        domain_expiry_domain: project?.domain_expiry_domain ?? null,
         created_at: null,
         updated_at: null,
       })
