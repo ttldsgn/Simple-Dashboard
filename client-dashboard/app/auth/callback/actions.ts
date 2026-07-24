@@ -292,7 +292,7 @@ export async function updateClient(formData: FormData) {
     // Columns may have been dropped by migration — fall through to projects update
   }
 
-  // Also update the projects table if a project_id was provided
+  // Also update the projects table if a project_id was explicitly provided
   if (projectId) {
     try {
       await supabaseAdmin
@@ -301,23 +301,6 @@ export async function updateClient(formData: FormData) {
         .eq('id', projectId)
     } catch {
       // Projects table may not exist yet — non-fatal
-    }
-  } else {
-    // Legacy fallback: try projects update directly if clientId matches a project owner
-    try {
-      const { data: membership } = await supabaseAdmin
-        .from('project_members')
-        .select('project_id')
-        .eq('user_id', clientId)
-        .maybeSingle()
-      if (membership?.project_id) {
-        await supabaseAdmin
-          .from('projects')
-          .update({ ...updateData, updated_at: new Date().toISOString() })
-          .eq('id', membership.project_id)
-      }
-    } catch {
-      // Non-fatal
     }
   }
 
