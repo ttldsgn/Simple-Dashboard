@@ -344,54 +344,41 @@ export async function resendInvite(formData: FormData) {
 }
 
 /**
- * Admin-only: delete a client user and their profile.
+ * Admin-only: permanently delete a client user and all their data.
  */
 export async function deleteClient(formData: FormData) {
   const supabaseAdmin = createAdminClient()
-
-  // Verify caller is an admin
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: 'Unauthorized' }
-  }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  if (profile?.role !== 'admin') {
-    return { error: 'Unauthorized — admin only' }
-  }
-
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Unauthorized' }
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+  if (profile?.role !== 'admin') return { error: 'Unauthorized — admin only' }
   const clientId = formData.get('client_id') as string
-
-  if (!clientId) {
-    return { error: 'Client ID is required' }
+  if (!clientId) return { error: 'Client ID is required' }
+  // Delete the auth user — cascades to profiles, tickets, invoices, project_members via FK
+  try { await supabaseAdmin.auth.admin.deleteUser(clientId) } catch {
+    // Auth user may not exist — clean up manually
+    try { await supabaseAdmin.from('project_members').delete().eq('user_id', clientId) } catch { /* ok */ }
+    try { await supabaseAdmin.from('profiles').delete().eq('id', clientId) } catch { /* ok */ }
   }
+  revalidatePath('/admin')
+  return { success: true }
+}
 
-  // Delete profile first
-  const { error: profileErr } = await supabaseAdmin
-    .from('profiles')
-    .delete()
-    .eq('id', clientId)
-
-  if (profileErr) {
-    return { error: profileErr.message }
-  }
-
-  // Delete auth user — if already deleted manually, that's fine
-  try {
-    await supabaseAdmin.auth.admin.deleteUser(clientId)
-  } catch {
-    // Auth user may already be deleted — profile is already cleaned up, so succeed
-  }
-
+/**
+ * Admin-only: permanently delete a project and all related data.
+ */
+export async function deleteProject(formData: FormData) {
+  const supabaseAdmin = createAdminClient()
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Unauthorized' }
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+  if (profile?.role !== 'admin') return { error: 'Unauthorized — admin only' }
+  const projectId = formData.get('project_id') as string
+  if (!projectId) return { error: 'Project ID is required' }
+  const { error } = await supabaseAdmin.from('projects').delete().eq('id', projectId)
+  if (error) return { error: error.message }
   revalidatePath('/admin')
   return { success: true }
 }

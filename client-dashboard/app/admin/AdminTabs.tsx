@@ -7,6 +7,7 @@ import {
   updateClient,
   resendInvite,
   deleteClient,
+  deleteProject,
 } from '@/app/auth/callback/actions'
 import { adminReplyToTicket, adminUpdateTicketStatus, deleteTickets, addInvoice, updateInvoiceStatus, updateInvoice, deleteInvoice } from '@/app/dashboard/actions'
 import MfaCard from '@/components/MfaCard'
@@ -74,7 +75,7 @@ interface Invoice {
 }
 
 export default function AdminTabs({ clients, emailMap, companyNameMap, projects, userProjectMap, projectMap, tickets, allInvoices }: Props) {
-  const [activeTab, setActiveTab] = useState<'clients' | 'invite' | 'tickets' | 'invoices'>('clients')
+  const [activeTab, setActiveTab] = useState<'clients' | 'invite' | 'tickets' | 'invoices' | 'projects'>('clients')
   const [editingClient, setEditingClient] = useState<ClientProfile | null>(null)
   const [message, setMessage] = useState('')
   const [inviteMessage, setInviteMessage] = useState('')
@@ -374,7 +375,7 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, projects,
       {/* Tab Navigation */}
       <div className="border-b border-slate-200">
         <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-          {(['clients', 'invite', 'tickets', 'invoices'] as const).map((tab) => (
+          {(['clients', 'invite', 'tickets', 'invoices', 'projects'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
