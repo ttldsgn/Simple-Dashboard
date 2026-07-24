@@ -391,7 +391,7 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, projects,
                     {openTickets.length}
                   </span>
                 )}</span>
-              ) : 'Invoices'}
+              ) : tab === 'projects' ? 'Projects' : 'Invoices'}
             </button>
           ))}
         </nav>
