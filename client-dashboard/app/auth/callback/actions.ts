@@ -126,21 +126,35 @@ export async function inviteUser(formData: FormData) {
 
   // Create the profiles row for the new user
   if (inviteData.user) {
-    const { error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .upsert({
-        id: inviteData.user.id,
-        company_name: companyName || null,
-        umami_website_id: umamiWebsiteId || null,
-        kuma_status_slug: kumaStatusSlug || null,
-        kuma_badges: kumaBadges,
-        domain_expiry_domain: domainExpiryDomain || null,
-        role: 'client',
-        updated_at: new Date().toISOString(),
-      })
+    // Try full upsert first; columns may have been dropped by migration
+    try {
+      const { error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .upsert({
+          id: inviteData.user.id,
+          company_name: companyName || null,
+          umami_website_id: umamiWebsiteId || null,
+          kuma_status_slug: kumaStatusSlug || null,
+          kuma_badges: kumaBadges,
+          domain_expiry_domain: domainExpiryDomain || null,
+          role: 'client',
+          updated_at: new Date().toISOString(),
+        })
 
-    if (profileError) {
-      return { error: `User invited but profile creation failed: ${profileError.message}` }
+      if (profileError) throw profileError
+    } catch {
+      // Retry with minimal columns
+      const { error: minimalError } = await supabaseAdmin
+        .from('profiles')
+        .upsert({
+          id: inviteData.user.id,
+          role: 'client',
+          updated_at: new Date().toISOString(),
+        })
+
+      if (minimalError) {
+        return { error: `User invited but profile creation failed: ${minimalError.message}` }
+      }
     }
 
     // If an existing project was selected, add user as member
