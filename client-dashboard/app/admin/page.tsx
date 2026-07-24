@@ -27,31 +27,12 @@ export default async function AdminPage() {
     return redirect('/dashboard')
   }
 
-  // Fetch all clients with their profiles — use admin client to bypass RLS
-  const { data: clients } = await supabaseAdmin
+  // Fetch all clients with their profiles
+  const { data: profileClients } = await supabaseAdmin
     .from('profiles')
     .select('*')
     .eq('role', 'client')
     .order('updated_at', { ascending: false })
-
-  // Build maps from clients: user ID → email, user ID → company name
-  const emailMap: Record<string, string> = {}
-  const companyNameMap: Record<string, string> = {}
-  for (const c of clients ?? []) {
-    companyNameMap[c.id] = c.company_name || ''
-  }
-  try {
-    const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers()
-    if (authUsers?.users) {
-      for (const u of authUsers.users) {
-        if (u.email) {
-          emailMap[u.id] = u.email
-        }
-      }
-    }
-  } catch {
-    // Admin client not configured
-  }
 
   // Fetch projects and members (may not exist before migration)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,11 +55,73 @@ export default async function AdminPage() {
     // Projects/members tables may not exist yet
   }
 
-  // Build project ID → project lookup
+  // Build maps: user ID → email, user ID → company name
+  const emailMap: Record<string, string> = {}
+  const companyNameMap: Record<string, string> = {}
+
+  // First, get company names from profiles
+  const profileMap: Record<string, Record<string, unknown>> = {}
+  for (const c of profileClients ?? []) {
+    profileMap[c.id] = c
+    companyNameMap[c.id] = c.company_name || ''
+  }
+
+  // Fill in company names from projects for users in project_members
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const projectMap: Record<string, any> = {}
   for (const p of projects) {
     projectMap[p.id] = p
+  }
+  for (const [userId, projId] of Object.entries(userProjectMap)) {
+    if (!companyNameMap[userId] && projectMap[projId]?.company_name) {
+      companyNameMap[userId] = projectMap[projId].company_name
+    }
+  }
+
+  // Discover all clients: merge profileClients with users found in project_members
+  const seenUserIds = new Set<string>()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const clients: any[] = []
+
+  // Add clients that have profiles
+  for (const c of profileClients ?? []) {
+    if (c.role === 'client') {
+      seenUserIds.add(c.id)
+      clients.push(c)
+    }
+  }
+
+  // Add clients discovered from project_members that don't have profiles
+  // These are users whose profiles were deleted but who still have project memberships
+  for (const userId of Object.keys(userProjectMap)) {
+    if (!seenUserIds.has(userId)) {
+      seenUserIds.add(userId)
+      clients.push({
+        id: userId,
+        role: 'client',
+        company_name: companyNameMap[userId] || null,
+        umami_website_id: null,
+        kuma_status_slug: null,
+        kuma_badges: null,
+        domain_expiry_domain: null,
+        created_at: null,
+        updated_at: null,
+      })
+    }
+  }
+
+  // Get emails from auth
+  try {
+    const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 })
+    if (authUsers?.users) {
+      for (const u of authUsers.users) {
+        if (u.email) {
+          emailMap[u.id] = u.email
+        }
+      }
+    }
+  } catch {
+    // Admin client not configured
   }
 
   // Fetch all tickets with messages
@@ -114,7 +157,7 @@ export default async function AdminPage() {
         </div>
 
         <AdminTabs
-          clients={clients ?? []}
+          clients={clients}
           projects={projects}
           emailMap={emailMap}
           companyNameMap={companyNameMap}
