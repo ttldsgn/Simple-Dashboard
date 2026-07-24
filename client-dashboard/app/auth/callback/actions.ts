@@ -130,16 +130,12 @@ export async function inviteUser(formData: FormData) {
     return { error: 'Failed to invite user' }
   }
 
-  // Create the profiles row for the new user (role only)
+  // Create the profiles row for the new user — minimal fields only
+  // Project settings go into the projects table, not profiles
   const { error: profileError } = await supabaseAdmin
     .from('profiles')
     .upsert({
       id: inviteData.user.id,
-      company_name: companyName || null,
-      umami_website_id: umamiWebsiteId || null,
-      kuma_status_slug: kumaStatusSlug || null,
-      kuma_badges: kumaBadges,
-      domain_expiry_domain: domainExpiryDomain || null,
       role: 'client',
       updated_at: new Date().toISOString(),
     })
@@ -276,14 +272,24 @@ export async function updateClient(formData: FormData) {
     updateData.kuma_badges = kumaBadges
   }
 
-  // Update the profiles table (backward compatible)
-  const { error } = await supabaseAdmin
-    .from('profiles')
-    .update(updateData)
-    .eq('id', clientId)
+  // Update the profiles table — only minimal fields (company_name etc. may have been dropped)
+  try {
+    const { error: profileErr } = await supabaseAdmin
+      .from('profiles')
+      .update({
+        company_name: companyName || null,
+        umami_website_id: umamiWebsiteId || null,
+        kuma_status_slug: kumaStatusSlug || null,
+        domain_expiry_domain: domainExpiryDomain || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', clientId)
 
-  if (error) {
-    return { error: error.message }
+    if (profileErr) {
+      return { error: profileErr.message }
+    }
+  } catch {
+    // Columns may have been dropped by migration — fall through to projects update
   }
 
   // Also update the projects table if a project_id was provided
@@ -295,6 +301,23 @@ export async function updateClient(formData: FormData) {
         .eq('id', projectId)
     } catch {
       // Projects table may not exist yet — non-fatal
+    }
+  } else {
+    // Legacy fallback: try projects update directly if clientId matches a project owner
+    try {
+      const { data: membership } = await supabaseAdmin
+        .from('project_members')
+        .select('project_id')
+        .eq('user_id', clientId)
+        .maybeSingle()
+      if (membership?.project_id) {
+        await supabaseAdmin
+          .from('projects')
+          .update({ ...updateData, updated_at: new Date().toISOString() })
+          .eq('id', membership.project_id)
+      }
+    } catch {
+      // Non-fatal
     }
   }
 

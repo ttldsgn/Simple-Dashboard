@@ -27,12 +27,28 @@ export default async function AdminPage() {
     return redirect('/dashboard')
   }
 
-  // Fetch all clients with their profiles
-  const { data: profileClients } = await supabaseAdmin
-    .from('profiles')
-    .select('*')
-    .eq('role', 'client')
-    .order('updated_at', { ascending: false })
+  // Fetch all clients with their profiles — only select columns that definitely exist
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let profileClients: any[] = []
+  try {
+    const { data } = await supabaseAdmin
+      .from('profiles')
+      .select('id, role, updated_at, created_at')
+      .eq('role', 'client')
+      .order('updated_at', { ascending: false })
+    profileClients = data ?? []
+  } catch {
+    // Columns may vary after migration — try minimal select
+    try {
+      const { data } = await supabaseAdmin
+        .from('profiles')
+        .select('id, role')
+        .eq('role', 'client')
+      profileClients = data ?? []
+    } catch {
+      // Fallback: empty list, clients will be discovered from project_members
+    }
+  }
 
   // Fetch projects and members (may not exist before migration)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
