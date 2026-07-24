@@ -19,14 +19,17 @@ interface KumaBadge {
 
 interface ClientProfile {
   id: string
-  company_name: string | null
-  umami_website_id: string | null
-  kuma_status_slug: string | null
+  company_name?: string | null
+  umami_website_id?: string | null
+  kuma_status_slug?: string | null
   kuma_badges?: KumaBadge[] | null
   domain_expiry_domain?: string | null
   role: string
   created_at?: string
   updated_at?: string
+  // Deprecated: these were on profiles before migration 00007
+  uptime_url?: string | null
+  analytics_url?: string | null
 }
 
 interface TicketMessage {
@@ -47,13 +50,23 @@ interface Ticket {
   created_at: string
   updated_at?: string
   closed_at?: string
+  project_id?: string
   ticket_messages?: TicketMessage[]
+}
+
+interface ClientProjectInfo {
+  projectId: string
+  companyName: string | null
+  umamiWebsiteId: string | null
+  kumaStatusSlug: string | null
+  kumaBadges: KumaBadge[] | null
+  domainExpiryDomain: string | null
 }
 
 interface Props {
   clients: ClientProfile[]
   emailMap: Record<string, string>
-  companyNameMap: Record<string, string>
+  clientProjectMap: Record<string, ClientProjectInfo>
   tickets: Ticket[]
   allInvoices: Invoice[]
   projects: { id: string; company_name: string | null }[]
@@ -68,9 +81,10 @@ interface Invoice {
   status: 'paid' | 'open'
   zoho_link: string
   created_at: string
+  project_id?: string
 }
 
-export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, allInvoices, projects }: Props) {
+export default function AdminTabs({ clients, emailMap, clientProjectMap, tickets, allInvoices, projects }: Props) {
   const [activeTab, setActiveTab] = useState<'clients' | 'invite' | 'tickets' | 'invoices'>('clients')
   const [editingClient, setEditingClient] = useState<ClientProfile | null>(null)
   const [message, setMessage] = useState('')
@@ -111,10 +125,24 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, 
 
   useAutoLogout(30)
 
+  // Helper: get project info for a client
+  function getClientProject(client: ClientProfile): ClientProjectInfo | undefined {
+    return clientProjectMap[client.id]
+  }
+
+  function getClientCompanyName(client: ClientProfile): string {
+    return getClientProject(client)?.companyName || client.company_name || 'Unnamed Client'
+  }
+
   function defaultBadges(client: ClientProfile): KumaBadge[] {
-    return (client.kuma_badges && Array.isArray(client.kuma_badges))
-      ? [...client.kuma_badges]
-      : []
+    const projectInfo = getClientProject(client)
+    if (projectInfo?.kumaBadges && Array.isArray(projectInfo.kumaBadges)) {
+      return [...projectInfo.kumaBadges]
+    }
+    if (client.kuma_badges && Array.isArray(client.kuma_badges)) {
+      return [...client.kuma_badges]
+    }
+    return []
   }
 
   function startEdit(client: ClientProfile) {
@@ -477,10 +505,7 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, 
                               {getStatusBadge(ticket.status)}
                             </div>
                             <p className="text-sm text-slate-500">
-                              {companyNameMap[ticket.client_id] && (
-                                <strong>{companyNameMap[ticket.client_id]}</strong>
-                              )}{' '}
-                              {emailMap[ticket.client_id] || 'Unknown'} · {new Date(ticket.created_at).toLocaleDateString()}
+                              {(clientProjectMap[ticket.client_id]?.companyName || emailMap[ticket.client_id] || 'Unknown')} · {new Date(ticket.created_at).toLocaleDateString()}
                             </p>
                           </div>
                           <span className="text-xs text-slate-400 ml-4">
@@ -589,56 +614,60 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, 
           ) : (
             <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
               <div className="divide-y divide-slate-200">
-                {clients.map((client) => (
-                  <div key={client.id} className="p-6">
-                    {editingClient?.id === client.id ? (
-                      <form onSubmit={handleUpdateClient} className="space-y-4">
-                        <input type="hidden" name="client_id" value={client.id} />
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                          <div><label className="block text-xs font-medium text-slate-500 mb-1">Company Name</label><input type="text" name="company_name" defaultValue={client.company_name || ''} className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /></div>
-                          <div><label className="block text-xs font-medium text-slate-500 mb-1">Umami Website ID</label><input type="text" name="umami_website_id" defaultValue={client.umami_website_id || ''} className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /></div>
-                          <div className="sm:col-span-2"><label className="block text-xs font-medium text-slate-500 mb-1">Kuma Status Slug</label><input type="text" name="kuma_status_slug" defaultValue={client.kuma_status_slug || ''} className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /></div>
-                          <div className="sm:col-span-2"><label className="block text-xs font-medium text-slate-500 mb-1">Domain (Expiration Lookup)</label><input type="text" name="domain_expiry_domain" defaultValue={client.domain_expiry_domain || ''} placeholder="e.g., example.com" className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /><p className="mt-1 text-xs text-slate-400">The domain to check WHOIS expiration for (e.g., example.com).</p></div>
-                          <div className="sm:col-span-2">{renderBadgeFields(editBadges, setEditBadges)}</div>
+                {clients.map((client) => {
+                  const projInfo = getClientProject(client)
+                  return (
+                    <div key={client.id} className="p-6">
+                      {editingClient?.id === client.id ? (
+                        <form onSubmit={handleUpdateClient} className="space-y-4">
+                          <input type="hidden" name="client_id" value={client.id} />
+                          <input type="hidden" name="project_id" value={projInfo?.projectId || ''} />
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div><label className="block text-xs font-medium text-slate-500 mb-1">Company Name</label><input type="text" name="company_name" defaultValue={projInfo?.companyName || client.company_name || ''} className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /></div>
+                            <div><label className="block text-xs font-medium text-slate-500 mb-1">Umami Website ID</label><input type="text" name="umami_website_id" defaultValue={projInfo?.umamiWebsiteId || client.umami_website_id || ''} className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /></div>
+                            <div className="sm:col-span-2"><label className="block text-xs font-medium text-slate-500 mb-1">Kuma Status Slug</label><input type="text" name="kuma_status_slug" defaultValue={projInfo?.kumaStatusSlug || client.kuma_status_slug || ''} className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /></div>
+                            <div className="sm:col-span-2"><label className="block text-xs font-medium text-slate-500 mb-1">Domain (Expiration Lookup)</label><input type="text" name="domain_expiry_domain" defaultValue={projInfo?.domainExpiryDomain || client.domain_expiry_domain || ''} placeholder="e.g., example.com" className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" /><p className="mt-1 text-xs text-slate-400">The domain to check WHOIS expiration for (e.g., example.com).</p></div>
+                            <div className="sm:col-span-2">{renderBadgeFields(editBadges, setEditBadges)}</div>
+                          </div>
+                          <div className="flex gap-3 pt-2">
+                            <button type="submit" disabled={isSubmitting} className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50">{isSubmitting ? 'Saving...' : 'Save'}</button>
+                            <button type="button" onClick={() => { setEditingClient(null); setEditBadges([]); setMessage('') }} className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button>
+                          </div>
+                        </form>
+                      ) : deleteConfirmId === client.id ? (
+                        <div className="space-y-4">
+                          <p className="text-sm text-slate-700">Are you sure you want to permanently delete <strong>{getClientCompanyName(client)}</strong>? This will remove their account and all data.</p>
+                          <div className="flex gap-3">
+                            <button type="button" onClick={() => handleDeleteClient(client.id)} disabled={isSubmitting} className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-50">{isSubmitting ? 'Deleting...' : 'Yes, Delete'}</button>
+                            <button type="button" onClick={() => setDeleteConfirmId(null)} className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button>
+                          </div>
                         </div>
-                        <div className="flex gap-3 pt-2">
-                          <button type="submit" disabled={isSubmitting} className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50">{isSubmitting ? 'Saving...' : 'Save'}</button>
-                          <button type="button" onClick={() => { setEditingClient(null); setEditBadges([]); setMessage('') }} className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button>
+                      ) : (
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1">
+                            <h4 className="text-md font-semibold text-slate-900">{getClientCompanyName(client)}</h4>
+                            <p className="text-sm text-slate-500">{emailMap[client.id] || 'No email'}</p>
+                            <div className="flex gap-4 mt-2 text-xs text-slate-400"><span>Umami ID: {projInfo?.umamiWebsiteId || client.umami_website_id || '—'}</span><span>Kuma Slug: {projInfo?.kumaStatusSlug || client.kuma_status_slug || '—'}</span></div>
+                            {(projInfo?.kumaBadges && Array.isArray(projInfo.kumaBadges) && projInfo.kumaBadges.length > 0) && (
+                              <div className="flex gap-2 mt-1 flex-wrap">{projInfo.kumaBadges.map((b, i) => (<span key={i} className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{b.label || 'Badge'}</span>))}</div>
+                            )}
+                            {client.created_at && (<p className="text-xs text-slate-400 pt-1">Joined {new Date(client.created_at).toLocaleDateString()}</p>)}
+                            {resendStatus[client.id] && (<p className={`text-xs ${resendStatus[client.id].includes('Error') ? 'text-red-600' : 'text-green-600'}`}>{resendStatus[client.id]}</p>)}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <a href={`/dashboard?client_id=${client.id}`}
+                              className="rounded-md border border-indigo-200 bg-white px-3 py-1.5 text-xs font-medium text-indigo-600 shadow-sm hover:bg-indigo-50">
+                              View Dashboard
+                            </a>
+                            <button onClick={() => startEdit(client)} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50">Edit</button>
+                            <button onClick={() => handleResendInvite(client.id)} disabled={resendStatus[client.id] === 'sending'} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-50">{resendStatus[client.id] === 'sending' ? 'Sending...' : 'Resend Invite'}</button>
+                            <button onClick={() => setDeleteConfirmId(client.id)} className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 shadow-sm hover:bg-red-50">Delete</button>
+                          </div>
                         </div>
-                      </form>
-                    ) : deleteConfirmId === client.id ? (
-                      <div className="space-y-4">
-                        <p className="text-sm text-slate-700">Are you sure you want to permanently delete <strong>{client.company_name || emailMap[client.id] || 'this client'}</strong>? This will remove their account and all data.</p>
-                        <div className="flex gap-3">
-                          <button type="button" onClick={() => handleDeleteClient(client.id)} disabled={isSubmitting} className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-50">{isSubmitting ? 'Deleting...' : 'Yes, Delete'}</button>
-                          <button type="button" onClick={() => setDeleteConfirmId(null)} className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-1">
-                          <h4 className="text-md font-semibold text-slate-900">{client.company_name || emailMap[client.id] || 'Unnamed Client'}</h4>
-                          <p className="text-sm text-slate-500">{emailMap[client.id] || 'No email'}</p>
-                          <div className="flex gap-4 mt-2 text-xs text-slate-400"><span>Umami ID: {client.umami_website_id || '—'}</span><span>Kuma Slug: {client.kuma_status_slug || '—'}</span></div>
-                          {client.kuma_badges && Array.isArray(client.kuma_badges) && client.kuma_badges.length > 0 && (
-                            <div className="flex gap-2 mt-1 flex-wrap">{client.kuma_badges.map((b, i) => (<span key={i} className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{b.label || 'Badge'}</span>))}</div>
-                          )}
-                          {client.created_at && (<p className="text-xs text-slate-400 pt-1">Joined {new Date(client.created_at).toLocaleDateString()}</p>)}
-                          {resendStatus[client.id] && (<p className={`text-xs ${resendStatus[client.id].includes('Error') ? 'text-red-600' : 'text-green-600'}`}>{resendStatus[client.id]}</p>)}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <a href={`/dashboard?client_id=${client.id}`}
-                            className="rounded-md border border-indigo-200 bg-white px-3 py-1.5 text-xs font-medium text-indigo-600 shadow-sm hover:bg-indigo-50">
-                            View Dashboard
-                          </a>
-                          <button onClick={() => startEdit(client)} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50">Edit</button>
-                          <button onClick={() => handleResendInvite(client.id)} disabled={resendStatus[client.id] === 'sending'} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-50">{resendStatus[client.id] === 'sending' ? 'Sending...' : 'Resend Invite'}</button>
-                          <button onClick={() => setDeleteConfirmId(client.id)} className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 shadow-sm hover:bg-red-50">Delete</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -697,7 +726,7 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, 
                   <option value="">Select a client...</option>
                   {clients.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.company_name || emailMap[c.id] || 'Unnamed Client'}
+                      {getClientCompanyName(c)}
                     </option>
                   ))}
                 </select>
@@ -776,7 +805,7 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, 
               <option value="">All Clients</option>
               {clients.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.company_name || emailMap[c.id] || 'Unnamed Client'}
+                  {getClientCompanyName(c)}
                 </option>
               ))}
             </select>
@@ -822,7 +851,7 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, tickets, 
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
                     {filtered.map((inv) => {
-                      const clientName = companyNameMap[inv.client_id] || emailMap[inv.client_id] || 'Unknown'
+                      const clientName = clientProjectMap[inv.client_id]?.companyName || emailMap[inv.client_id] || 'Unknown'
                       return (
                         <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
                           <td className="px-4 py-3 whitespace-nowrap text-slate-700">{clientName}</td>

@@ -21,6 +21,33 @@ export async function createTicket(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
 
+  // Determine the user's project_id
+  let projectId: string | null = null
+  const { data: memberRow } = await supabase
+    .from('project_members')
+    .select('project_id')
+    .eq('user_id', user.id)
+    .maybeSingle()
+  if (memberRow?.project_id) {
+    projectId = memberRow.project_id
+  }
+
+  // Fallback: if project_members doesn't exist yet, check for a project via admin client
+  if (!projectId) {
+    const { data: fallbackRow } = await supabaseAdmin
+      .from('project_members')
+      .select('project_id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (fallbackRow?.project_id) {
+      projectId = fallbackRow.project_id
+    }
+  }
+
+  if (!projectId) {
+    throw new Error('No project found for your account. Please contact support.')
+  }
+
   const title = formData.get('title') as string
   const description = formData.get('description') as string
   const file = formData.get('attachment') as File | null
@@ -61,6 +88,7 @@ export async function createTicket(formData: FormData) {
     .from('tickets')
     .insert({
       client_id: user.id,
+      project_id: projectId,
       title,
       description,
       status: 'open',
@@ -242,10 +270,22 @@ export async function addInvoice(formData: FormData) {
   if (!clientId || !description || !zohoLink) throw new Error('Required fields missing')
   if (status !== 'paid' && status !== 'open') throw new Error('Invalid status')
 
+  // Determine project_id for this client
+  let projectId: string | null = null
+  const { data: memberRow } = await supabaseAdmin
+    .from('project_members')
+    .select('project_id')
+    .eq('user_id', clientId)
+    .maybeSingle()
+  if (memberRow?.project_id) {
+    projectId = memberRow.project_id
+  }
+
   const { error } = await supabaseAdmin
     .from('invoices')
     .insert({
       client_id: clientId,
+      project_id: projectId,
       invoice_date: invoiceDate || new Date().toISOString().split('T')[0],
       description,
       amount,

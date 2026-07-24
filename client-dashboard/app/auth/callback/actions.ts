@@ -67,7 +67,8 @@ export async function requestPasswordReset(formData: FormData) {
 
 /**
  * Admin-only: invite a new client user by email.
- * Creates the auth user (via invite) and the profiles row with settings.
+ * Creates the auth user (via invite), a profiles row (role only),
+ * a projects row with settings, and a project_members row.
  */
 export async function inviteUser(formData: FormData) {
   const supabaseAdmin = createAdminClient()
@@ -124,49 +125,61 @@ export async function inviteUser(formData: FormData) {
     return { error: inviteError.message }
   }
 
-  // Create the profiles row for the new user
-  if (inviteData.user) {
-    // Try full upsert first; columns may have been dropped by migration
-    try {
-      const { error: profileError } = await supabaseAdmin
-        .from('profiles')
-        .upsert({
-          id: inviteData.user.id,
-          company_name: companyName || null,
-          umami_website_id: umamiWebsiteId || null,
-          kuma_status_slug: kumaStatusSlug || null,
-          kuma_badges: kumaBadges,
-          domain_expiry_domain: domainExpiryDomain || null,
-          role: 'client',
-          updated_at: new Date().toISOString(),
-        })
+  if (!inviteData.user) {
+    return { error: 'Failed to create user' }
+  }
 
-      if (profileError) throw profileError
-    } catch {
-      // Retry with minimal columns
-      const { error: minimalError } = await supabaseAdmin
-        .from('profiles')
-        .upsert({
-          id: inviteData.user.id,
-          role: 'client',
-          updated_at: new Date().toISOString(),
-        })
+  const newUserId = inviteData.user.id
 
-      if (minimalError) {
-        return { error: `User invited but profile creation failed: ${minimalError.message}` }
-      }
+  // 1. Create the profiles row (auth-level fields only: role)
+  const { error: profileError } = await supabaseAdmin
+    .from('profiles')
+    .upsert({
+      id: newUserId,
+      role: 'client',
+      updated_at: new Date().toISOString(),
+    })
+
+  if (profileError) {
+    return { error: `Profile creation failed: ${profileError.message}` }
+  }
+
+  // 2. Handle project membership
+  let projectId = existingProjectId || null
+
+  if (!existingProjectId) {
+    // Create a new project for this client
+    const { data: newProject, error: projectError } = await supabaseAdmin
+      .from('projects')
+      .insert({
+        company_name: companyName || null,
+        umami_website_id: umamiWebsiteId || null,
+        kuma_status_slug: kumaStatusSlug || null,
+        kuma_badges: kumaBadges.length > 0 ? kumaBadges : null,
+        domain_expiry_domain: domainExpiryDomain || null,
+      })
+      .select('id')
+      .single()
+
+    if (projectError) {
+      return { error: `Project creation failed: ${projectError.message}` }
     }
+    projectId = newProject.id
+  }
 
-    // If an existing project was selected, add user as member
-    if (existingProjectId) {
-      try {
-        await supabaseAdmin.from('project_members').insert({
-          project_id: existingProjectId,
-          user_id: inviteData.user.id,
-          role: 'member',
-        })
-      } catch {
-        // Non-fatal: project_members table may not exist yet
+  // 3. Add user to the project
+  if (projectId) {
+    try {
+      await supabaseAdmin.from('project_members').insert({
+        project_id: projectId,
+        user_id: newUserId,
+        role: existingProjectId ? 'member' : 'owner',
+      })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      // If project_members table doesn't exist, this is non-fatal
+      if (!msg.includes('does not exist')) {
+        return { error: `Project membership creation failed: ${msg}` }
       }
     }
   }
@@ -176,7 +189,8 @@ export async function inviteUser(formData: FormData) {
 }
 
 /**
- * Admin-only: update an existing client's settings.
+ * Admin-only: update an existing client's project settings.
+ * Writes to the projects table, not profiles.
  */
 export async function updateClient(formData: FormData) {
   const supabaseAdmin = createAdminClient()
@@ -202,6 +216,7 @@ export async function updateClient(formData: FormData) {
   }
 
   const clientId = formData.get('client_id') as string
+  const projectId = formData.get('project_id') as string
   const companyName = formData.get('company_name') as string
   const umamiWebsiteId = formData.get('umami_website_id') as string
   const kumaStatusSlug = formData.get('kuma_status_slug') as string
@@ -234,13 +249,36 @@ export async function updateClient(formData: FormData) {
     updateData.kuma_badges = kumaBadges
   }
 
-  const { error } = await supabaseAdmin
-    .from('profiles')
-    .update(updateData)
-    .eq('id', clientId)
+  // If we have a project_id from the form, update that project directly
+  if (projectId) {
+    const { error } = await supabaseAdmin
+      .from('projects')
+      .update(updateData)
+      .eq('id', projectId)
 
-  if (error) {
-    return { error: error.message }
+    if (error) {
+      return { error: error.message }
+    }
+  } else {
+    // Fallback: find the user's project via project_members and update it
+    const { data: memberRow } = await supabaseAdmin
+      .from('project_members')
+      .select('project_id')
+      .eq('user_id', clientId)
+      .maybeSingle()
+
+    if (!memberRow?.project_id) {
+      return { error: 'No project found for this client.' }
+    }
+
+    const { error } = await supabaseAdmin
+      .from('projects')
+      .update(updateData)
+      .eq('id', memberRow.project_id)
+
+    if (error) {
+      return { error: error.message }
+    }
   }
 
   revalidatePath('/admin')
@@ -302,7 +340,7 @@ export async function resendInvite(formData: FormData) {
 }
 
 /**
- * Admin-only: delete a client user and their profile.
+ * Admin-only: delete a client user, their profile, and project memberships.
  */
 export async function deleteClient(formData: FormData) {
   const supabaseAdmin = createAdminClient()
@@ -333,7 +371,17 @@ export async function deleteClient(formData: FormData) {
     return { error: 'Client ID is required' }
   }
 
-  // Delete profile first
+  // Delete project_members rows for this user
+  try {
+    await supabaseAdmin
+      .from('project_members')
+      .delete()
+      .eq('user_id', clientId)
+  } catch {
+    // Table may not exist
+  }
+
+  // Delete profile
   const { error: profileErr } = await supabaseAdmin
     .from('profiles')
     .delete()
@@ -355,7 +403,8 @@ export async function deleteClient(formData: FormData) {
 }
 
 /**
- * Admin-only: purge profiles that have no matching auth user (orphans).
+ * Admin-only: purge profiles that have no matching auth user (orphans),
+ * and their project memberships.
  */
 export async function purgeOrphans() {
   const supabaseAdmin = createAdminClient()
@@ -399,6 +448,16 @@ export async function purgeOrphans() {
 
   if (orphanIds.length === 0) {
     return { success: true, count: 0 }
+  }
+
+  // Delete orphans' project memberships first
+  try {
+    await supabaseAdmin
+      .from('project_members')
+      .delete()
+      .in('user_id', orphanIds)
+  } catch {
+    // Table may not exist
   }
 
   // Delete orphans

@@ -27,19 +27,15 @@ export default async function AdminPage() {
     return redirect('/dashboard')
   }
 
-  // Fetch all clients with their profiles — use admin client to bypass RLS
+  // Fetch all client profiles (auth-level: role only)
   const { data: clients } = await supabaseAdmin
     .from('profiles')
     .select('*')
     .eq('role', 'client')
     .order('updated_at', { ascending: false })
 
-  // Build maps from clients: user ID → email, user ID → company name
+  // Build maps from auth: user ID → email
   const emailMap: Record<string, string> = {}
-  const companyNameMap: Record<string, string> = {}
-  for (const c of clients ?? []) {
-    companyNameMap[c.id] = c.company_name || ''
-  }
   try {
     const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers()
     if (authUsers?.users) {
@@ -51,6 +47,68 @@ export default async function AdminPage() {
     }
   } catch {
     // Admin client not configured
+  }
+
+  // Fetch all project_members for clients, joined with projects
+  const clientProjectMap: Record<string, {
+    projectId: string
+    companyName: string | null
+    umamiWebsiteId: string | null
+    kumaStatusSlug: string | null
+    kumaBadges: Array<{ label: string; url: string }> | null
+    domainExpiryDomain: string | null
+  }> = {}
+  try {
+    const clientIds = (clients ?? []).map(c => c.id)
+    if (clientIds.length > 0) {
+      const { data: memberships } = await supabaseAdmin
+        .from('project_members')
+        .select('user_id, project_id')
+
+      if (memberships && memberships.length > 0) {
+        const projectIds = [...new Set(memberships.map(m => m.project_id))]
+
+        // Get project IDs per user
+        const userProjectIds: Record<string, string> = {}
+        for (const m of memberships) {
+          if (m.user_id && m.project_id) {
+            userProjectIds[m.user_id] = m.project_id
+          }
+        }
+
+        // Fetch projects
+        if (projectIds.length > 0) {
+          const { data: projects } = await supabaseAdmin
+            .from('projects')
+            .select('*')
+            .in('id', projectIds)
+
+          if (projects) {
+            const projectMap: Record<string, typeof projects[number]> = {}
+            for (const p of projects) {
+              projectMap[p.id] = p
+            }
+
+            // Build the client→project mapping
+            for (const [userId, projId] of Object.entries(userProjectIds)) {
+              const proj = projectMap[projId]
+              if (proj) {
+                clientProjectMap[userId] = {
+                  projectId: proj.id,
+                  companyName: proj.company_name,
+                  umamiWebsiteId: proj.umami_website_id,
+                  kumaStatusSlug: proj.kuma_status_slug,
+                  kumaBadges: proj.kuma_badges,
+                  domainExpiryDomain: proj.domain_expiry_domain,
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // project_members/projects tables may not exist yet
   }
 
   // Fetch all tickets with messages
@@ -98,7 +156,7 @@ export default async function AdminPage() {
         <AdminTabs
           clients={clients ?? []}
           emailMap={emailMap}
-          companyNameMap={companyNameMap}
+          clientProjectMap={clientProjectMap}
           tickets={tickets ?? []}
           allInvoices={allInvoices ?? []}
           projects={projects}
