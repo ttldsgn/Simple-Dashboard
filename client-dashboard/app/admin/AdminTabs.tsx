@@ -7,7 +7,6 @@ import {
   updateClient,
   resendInvite,
   deleteClient,
-  purgeOrphans,
 } from '@/app/auth/callback/actions'
 import { adminReplyToTicket, adminUpdateTicketStatus, deleteTickets, addInvoice, updateInvoiceStatus, updateInvoice, deleteInvoice } from '@/app/dashboard/actions'
 import MfaCard from '@/components/MfaCard'
@@ -82,8 +81,6 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, projects,
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [resendStatus, setResendStatus] = useState<Record<string, string>>({})
-  const [purging, setPurging] = useState(false)
-  const [purgeResult, setPurgeResult] = useState('')
   const [expandedTicket, setExpandedTicket] = useState<string | null>(null)
   const [ticketReply, setTicketReply] = useState('')
   const [ticketStatusMsg, setTicketStatusMsg] = useState('')
@@ -223,20 +220,6 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, projects,
       setDeleteConfirmId(null)
     }
     setIsSubmitting(false)
-  }
-
-  async function handlePurgeOrphans() {
-    setPurging(true)
-    setPurgeResult('')
-    const result = await purgeOrphans()
-    if (result && 'error' in result && result.error) {
-      setPurgeResult(`Error: ${result.error}`)
-    } else if (result && 'count' in result) {
-      setPurgeResult(result.count === 0
-        ? 'No orphaned profiles found.'
-        : `Removed ${result.count} orphaned profile(s).`)
-    }
-    setPurging(false)
   }
 
   async function handleAdminReply(ticketId: string) {
@@ -589,16 +572,7 @@ export default function AdminTabs({ clients, emailMap, companyNameMap, projects,
       {/* Clients Tab */}
       {activeTab === 'clients' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-900">Clients ({clients.length})</h3>
-            <button type="button" onClick={handlePurgeOrphans} disabled={purging}
-              className="rounded-md border border-amber-200 bg-white px-3 py-1.5 text-xs font-medium text-amber-600 shadow-sm hover:bg-amber-50 disabled:opacity-50">
-              {purging ? 'Purging...' : 'Purge Orphans'}
-            </button>
-          </div>
-          {purgeResult && (
-            <div className={`rounded-md p-3 text-sm ${purgeResult.includes('Error') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>{purgeResult}</div>
-          )}
+          <h3 className="text-lg font-semibold text-slate-900">Clients ({clients.length})</h3>
           {message && (
             <div className={`rounded-md p-3 text-sm ${message.includes('successfully') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{message}</div>
           )}

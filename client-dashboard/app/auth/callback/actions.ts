@@ -445,8 +445,8 @@ export async function purgeOrphans() {
     return { success: true, count: 0 }
   }
 
-  // Get all auth users
-  const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers()
+  // Get all auth users — request a high page size to avoid pagination truncation
+  const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 })
   const validIds = new Set((authUsers?.users ?? []).map((u) => u.id))
 
   // Find orphans
