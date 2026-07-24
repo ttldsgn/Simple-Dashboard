@@ -27,117 +27,21 @@ export default async function AdminPage() {
     return redirect('/dashboard')
   }
 
-  // Fetch all clients with their profiles — only select columns that definitely exist
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let profileClients: any[] = []
-  try {
-    const { data } = await supabaseAdmin
-      .from('profiles')
-      .select('id, role, updated_at, created_at')
-      .eq('role', 'client')
-      .order('updated_at', { ascending: false })
-    profileClients = data ?? []
-  } catch {
-    // Columns may vary after migration — try minimal select
-    try {
-      const { data } = await supabaseAdmin
-        .from('profiles')
-        .select('id, role')
-        .eq('role', 'client')
-      profileClients = data ?? []
-    } catch {
-      // Fallback: empty list, clients will be discovered from project_members
-    }
-  }
+  // Fetch all clients with their profiles — use admin client to bypass RLS
+  const { data: clients } = await supabaseAdmin
+    .from('profiles')
+    .select('*')
+    .eq('role', 'client')
+    .order('updated_at', { ascending: false })
 
-  // Fetch projects and members (may not exist before migration)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let projects: any[] = []
-  let userProjectMap: Record<string, string> = {}
-  try {
-    const { data: projectData } = await supabaseAdmin
-      .from('projects')
-      .select('*')
-      .order('updated_at', { ascending: false })
-    projects = projectData ?? []
-
-    const { data: memberData } = await supabaseAdmin
-      .from('project_members')
-      .select('*')
-    for (const pm of memberData ?? []) {
-      userProjectMap[pm.user_id] = pm.project_id
-    }
-  } catch {
-    // Projects/members tables may not exist yet
-  }
-
-  // Build maps: user ID → email, user ID → company name
+  // Build maps from clients: user ID → email, user ID → company name
   const emailMap: Record<string, string> = {}
   const companyNameMap: Record<string, string> = {}
-
-  // First, get company names from profiles
-  const profileMap: Record<string, Record<string, unknown>> = {}
-  for (const c of profileClients ?? []) {
-    profileMap[c.id] = c
+  for (const c of clients ?? []) {
     companyNameMap[c.id] = c.company_name || ''
   }
-
-  // Fill in company names from projects for users in project_members
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const projectMap: Record<string, any> = {}
-  for (const p of projects) {
-    projectMap[p.id] = p
-  }
-  for (const [userId, projId] of Object.entries(userProjectMap)) {
-    if (!companyNameMap[userId] && projectMap[projId]?.company_name) {
-      companyNameMap[userId] = projectMap[projId].company_name
-    }
-  }
-
-  // Discover all clients: merge profileClients with users found in project_members
-  const seenUserIds = new Set<string>()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const clients: any[] = []
-
-  // Add clients that have profiles — enrich with project data for display/edit forms
-  for (const c of profileClients ?? []) {
-    if (c.role === 'client') {
-      seenUserIds.add(c.id)
-      const projectId = userProjectMap[c.id]
-      const project = projectId ? projectMap[projectId] : null
-      clients.push({
-        ...c,
-        company_name: c.company_name || project?.company_name || null,
-        umami_website_id: c.umami_website_id ?? project?.umami_website_id ?? null,
-        kuma_status_slug: c.kuma_status_slug ?? project?.kuma_status_slug ?? null,
-        kuma_badges: c.kuma_badges ?? project?.kuma_badges ?? null,
-        domain_expiry_domain: c.domain_expiry_domain ?? project?.domain_expiry_domain ?? null,
-      })
-    }
-  }
-
-  // Add clients discovered from project_members that don't have profiles
-  for (const userId of Object.keys(userProjectMap)) {
-    if (!seenUserIds.has(userId)) {
-      seenUserIds.add(userId)
-      const project = projectMap[userProjectMap[userId]]
-      clients.push({
-        id: userId,
-        role: 'client',
-        company_name: project?.company_name || null,
-        umami_website_id: project?.umami_website_id ?? null,
-        kuma_status_slug: project?.kuma_status_slug ?? null,
-        kuma_badges: project?.kuma_badges ?? null,
-        domain_expiry_domain: project?.domain_expiry_domain ?? null,
-        created_at: null,
-        updated_at: null,
-      })
-    }
-  }
-
-  // Get emails from auth
   try {
-    const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 })
+    const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers()
     if (authUsers?.users) {
       for (const u of authUsers.users) {
         if (u.email) {
@@ -161,6 +65,16 @@ export default async function AdminPage() {
     .select('*')
     .order('invoice_date', { ascending: false })
 
+  // Fetch projects for invite dropdown
+  const projects: { id: string; company_name: string | null }[] = []
+  try {
+    const { data: projectData } = await supabaseAdmin
+      .from('projects')
+      .select('id, company_name')
+      .order('updated_at', { ascending: false })
+    if (projectData) projects.push(...projectData)
+  } catch { /* ok */ }
+
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       <div className="mx-auto max-w-6xl">
@@ -182,14 +96,12 @@ export default async function AdminPage() {
         </div>
 
         <AdminTabs
-          clients={clients}
-          projects={projects}
+          clients={clients ?? []}
           emailMap={emailMap}
           companyNameMap={companyNameMap}
-          userProjectMap={userProjectMap}
-          projectMap={projectMap}
           tickets={tickets ?? []}
           allInvoices={allInvoices ?? []}
+          projects={projects}
         />
       </div>
     </div>
